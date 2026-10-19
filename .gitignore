@@ -1,0 +1,38 @@
+# Rust build output
+/target/
+
+# .NET build and IDE output
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.pdb
+
+# Published applications and installers
+/publish/
+/publish_*/
+/out/
+
+# Temporary build and release staging
+/.build-*/
+/.release-staging/
+installer/obj/InstallerStaging/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.*.swp
+.*.swo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local secrets
+*.pem
+*.env
+/.wix/

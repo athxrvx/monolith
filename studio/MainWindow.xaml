@@ -1,0 +1,75 @@
+<Window
+    x:Class="Monolith.Studio.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:views="using:Monolith.Studio.Views"
+    mc:Ignorable="d"
+    Title="Monolith">
+
+    <!-- A dark tint keeps the acrylic material subtle instead of washing out the settings UI. -->
+    <Grid Background="#CC1A1A1A">
+        <Grid.RowDefinitions>
+            <!-- Integrated Custom TitleBar -->
+            <RowDefinition Height="48"/>
+            <!-- Content Area with NavigationView -->
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Custom TitleBar Header -->
+        <Grid Grid.Row="0" x:Name="AppTitleBar" Background="Transparent" Padding="24,0,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Image Width="24" Height="24" Source="ms-appx:///Assets/monolith.png" Stretch="Uniform"/>
+                <TextBlock Text="Monolith" FontSize="14" FontWeight="SemiBold" Foreground="#F5FFFFFF" VerticalAlignment="Center"/>
+                <Border Width="1" Height="16" Background="#40FFFFFF" Margin="3,0"/>
+                <TextBlock x:Name="BreadcrumbTitle" Text="General Settings" FontSize="13" Foreground="#B8FFFFFF" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- NavigationView Shell -->
+        <NavigationView Grid.Row="1"
+                        x:Name="NavView"
+                        PaneDisplayMode="Left"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        SelectionChanged="NavView_SelectionChanged"
+                        Background="Transparent"
+                        OpenPaneLength="252"
+                        IsPaneToggleButtonVisible="True"
+                        CompactPaneLength="56">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="General" Tag="General" Icon="Setting"/>
+                <NavigationViewItem Content="Scrolling WM" Tag="Tiling">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE737;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Window Rules" Tag="Rules">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8B7;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Appearance" Tag="Appearance">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE790;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Hotkeys" Tag="Hotkeys">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE765;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <!-- Frame hosting settings pages with EntranceNavigationTransitionInfo -->
+            <Frame x:Name="ContentFrame" Background="Transparent"/>
+        </NavigationView>
+    </Grid>
+</Window>

@@ -1,0 +1,47 @@
+<Page
+    x:Class="Monolith.Studio.Views.TilingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:ui="using:CommunityToolkit.WinUI">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,24,40,40">
+        <StackPanel Spacing="18" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Scrolling Window Manager" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Windows live in one horizontal workspace. Focus a window to bring its column into view, then move left or right to browse." FontSize="14" Opacity="0.72" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <InfoBar IsOpen="True"
+                     IsClosable="False"
+                     Severity="Informational"
+                     Title="Scrolling layout"
+                     Message="Use native title-bar dragging to reorder windows or move them between columns. Alt+Arrow keys or Alt+H/J/K/L navigates; Alt+Shift+V tiles vertically; Ctrl+Alt+Shift+H/J/K/L resizes." />
+
+            <TextBlock Text="Workspace layout" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
+            <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
+                     Title="Centered scrolling workspace"
+                     Message="The focused window stays centered as you navigate. New windows open in the focused position; adjacent columns remain available by scrolling." />
+            <controls:SettingsCard Header="Top margin" Description="Space between the top of the display and managed windows, in pixels." HeaderIcon="{ui:FontIcon Glyph=&#xE74A;}">
+                <NumberBox Width="120" Minimum="0" Maximum="64" Value="{x:Bind ViewModel.Config.OuterGapsTop, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Bottom margin" Description="Space between the bottom of the display and managed windows, in pixels." HeaderIcon="{ui:FontIcon Glyph=&#xE74A;}">
+                <NumberBox Width="120" Minimum="0" Maximum="64" Value="{x:Bind ViewModel.Config.OuterGapsBottom, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Left margin" Description="Space between the left edge of the display and managed windows, in pixels." HeaderIcon="{ui:FontIcon Glyph=&#xE74A;}">
+                <NumberBox Width="120" Minimum="0" Maximum="64" Value="{x:Bind ViewModel.Config.OuterGapsLeft, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Right margin" Description="Space between the right edge of the display and managed windows, in pixels." HeaderIcon="{ui:FontIcon Glyph=&#xE74A;}">
+                <NumberBox Width="120" Minimum="0" Maximum="64" Value="{x:Bind ViewModel.Config.OuterGapsRight, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Space between columns" Description="Distance between adjacent scrolling windows (0–64 px)." HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                <NumberBox Width="120" Minimum="0" Maximum="64" Value="{x:Bind ViewModel.Config.InnerGaps, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Minimum column width" Description="Prevents managed windows from becoming too narrow (100–800 px)." HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                <NumberBox Width="120" Minimum="100" Maximum="800" Value="{x:Bind ViewModel.Config.MinWidth, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Resize step" Description="Width and height shortcuts adjust by this percentage of the display." HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                <NumberBox Width="120" Minimum="1" Maximum="20" Value="{x:Bind ViewModel.Config.ResizeStepPercentage, Mode=TwoWay}" ValueChanged="OnNumberBoxChanged" SpinButtonPlacementMode="Inline" />
+            </controls:SettingsCard>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

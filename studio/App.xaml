@@ -1,0 +1,35 @@
+<Application
+    x:Class="Monolith.Studio.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Monolith.Studio">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Windows Settings inspired, high contrast surfaces and restrained accent. -->
+            <Color x:Key="OledDarkColor">#1C1C1C</Color>
+            <Color x:Key="SurfaceElevatedColor">#2B2B2B</Color>
+            <Color x:Key="SurfaceHigherColor">#383838</Color>
+            <Color x:Key="AccentBlueColor">#60CDFF</Color>
+
+            <SolidColorBrush x:Key="OledDarkBrush" Color="{StaticResource OledDarkColor}" />
+            <SolidColorBrush x:Key="SurfaceElevatedBrush" Color="{StaticResource SurfaceElevatedColor}" />
+            <SolidColorBrush x:Key="SurfaceHigherBrush" Color="{StaticResource SurfaceHigherColor}" />
+            <SolidColorBrush x:Key="AccentBlueBrush" Color="{StaticResource AccentBlueColor}" />
+
+            <!-- Custom Accent Button Style -->
+            <Style x:Key="AccentButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="#60CDFF" />
+                <Setter Property="Foreground" Value="#202020" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="Padding" Value="18,8" />
+                <Setter Property="BorderThickness" Value="0" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+
