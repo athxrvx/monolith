@@ -27,10 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\launcher\Assets\monolith_engine.exe" Link="Assets\monolith_engine.exe" />
+    <EmbeddedResource Include="Assets\monolith_engine.exe" />
     <Content Include="..\assets\monolith_icon.ico" Link="Assets\monolith_icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\monolith.png" Link="Assets\monolith.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Compile Include="..\launcher\Services\EngineSupervisor.cs" Link="Services\EngineSupervisor.cs" />
-    <Compile Include="..\launcher\Services\VirtualDesktopNav.cs" Link="Services\VirtualDesktopNav.cs" />
   </ItemGroup>
 </Project>

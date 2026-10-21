@@ -5,14 +5,13 @@
       "name": "Launch",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceRoot}/target/debug/glazewm.exe",
-      "preLaunchTask": "rust: cargo build",
-      "args": ["start"],
+      "program": "${workspaceFolder}/target/debug/monolith_engine.exe",
+      "preLaunchTask": "cargo build -p monolith_engine",
+      "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceRoot}",
       "environment": [],
       "console": "integratedTerminal"
-      // "externalConsole": true
     }
   ]
 }

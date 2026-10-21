@@ -19,7 +19,7 @@
                 <TextBlock Text="Engine" FontSize="18" FontWeight="SemiBold" Margin="2,0,0,2" />
 
                 <controls:SettingsCard Header="Monolith Engine"
-                                       Description="Core window management and virtual desktop service."
+                                       Description="Core window management and Monolith workspace service."
                                        HeaderIcon="{ui:FontIcon Glyph=&#xE9F5;}">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <Ellipse Width="9" Height="9" Fill="{x:Bind ViewModel.EngineStatusColor, Mode=OneWay}" VerticalAlignment="Center" />

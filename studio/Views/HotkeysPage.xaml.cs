@@ -33,7 +33,12 @@ public sealed partial class HotkeysPage : Page
             "Launch Terminal (wt.exe)", "Open File Explorer", "Launch Application", "Run Shell Command",
             "Widen Window", "Narrow Window", "Increase Window Height", "Decrease Window Height",
             "Focus Left", "Focus Right", "Focus Up", "Focus Down",
-            "Previous Desktop", "Next Desktop", "Move Window to Previous Desktop", "Move Window to Next Desktop"
+            "Move Window Left", "Move Window Right", "Move Window Up", "Move Window Down",
+            "Previous Workspace", "Next Workspace", "Move Window to Previous Workspace", "Move Window to Next Workspace",
+            "Switch to Workspace 1", "Switch to Workspace 2", "Switch to Workspace 3", "Switch to Workspace 4",
+            "Switch to Workspace 5", "Switch to Workspace 6", "Switch to Workspace 7", "Switch to Workspace 8", "Switch to Workspace 9",
+            "Move Window to Workspace 1", "Move Window to Workspace 2", "Move Window to Workspace 3", "Move Window to Workspace 4",
+            "Move Window to Workspace 5", "Move Window to Workspace 6", "Move Window to Workspace 7", "Move Window to Workspace 8", "Move Window to Workspace 9"
         };
         var actionBox = new ComboBox { ItemsSource = actions, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         var bindingBox = CreateShortcutRecorder();

@@ -9,7 +9,7 @@
         <StackPanel Spacing="18" HorizontalAlignment="Stretch">
             <StackPanel Spacing="4">
                 <TextBlock Text="Keyboard Shortcuts &amp; Hotkeys" FontSize="30" FontWeight="SemiBold" />
-                <TextBlock Text="Bind window controls, workspace actions, or launch any program or shell command." FontSize="14" Opacity="0.72" />
+                <TextBlock Text="Bind window controls, Monolith workspace navigation, or launch any program or shell command." FontSize="14" Opacity="0.72" />
             </StackPanel>
 
             <controls:SettingsCard Header="Interactive hotkey remapping"

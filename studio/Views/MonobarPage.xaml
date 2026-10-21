@@ -1,0 +1,58 @@
+<Page
+    x:Class="Monolith.Studio.Views.MonobarPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:ui="using:CommunityToolkit.WinUI">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,24,40,40">
+        <StackPanel Spacing="16">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Monobar" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Build a top bar that fits your workflow. Enable modules, arrange their order, and place them on either side or in the center." FontSize="14" Opacity="0.72" TextWrapping="Wrap" />
+            </StackPanel>
+            <controls:SettingsCard Header="Show Monobar" Description="Keep Monobar visible while Monolith is enabled." HeaderIcon="{ui:FontIcon Glyph=&#xE8A7;}">
+                <ToggleSwitch x:Name="EnabledToggle" OnContent="On" OffContent="Off" />
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Bar height" Description="Set the top bar height in pixels." HeaderIcon="{ui:FontIcon Glyph=&#xE744;}">
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Slider x:Name="HeightSlider" Width="220" Minimum="28" Maximum="64" StepFrequency="2" />
+                    <TextBlock x:Name="HeightValue" Foreground="#60CDFF" VerticalAlignment="Center" />
+                </StackPanel>
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Surface opacity" Description="Adjust the bar tint strength." HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Slider x:Name="OpacitySlider" Width="220" Minimum="20" Maximum="100" StepFrequency="5" />
+                    <TextBlock x:Name="OpacityValue" Foreground="#60CDFF" VerticalAlignment="Center" />
+                </StackPanel>
+            </controls:SettingsCard>
+            <controls:SettingsCard Header="Backdrop material" Description="Choose the appearance of the bar surface." HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
+                <ComboBox x:Name="MaterialCombo" Width="220">
+                    <x:String>Acrylic (Frosted Glass)</x:String>
+                    <x:String>Mica</x:String>
+                    <x:String>Mica Alt</x:String>
+                    <x:String>Pure OLED Dark</x:String>
+                </ComboBox>
+            </controls:SettingsCard>
+            <TextBlock Text="Modules" FontSize="20" FontWeight="SemiBold" Margin="2,12,0,0" />
+            <TextBlock Text="Move modules up or down to change their order. Choose Left, Center, or Right for their placement." Opacity="0.72" TextWrapping="Wrap" />
+            <ItemsControl x:Name="ModulesList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <controls:SettingsCard Header="{Binding DisplayName}" Description="{Binding Description}" Margin="0,0,0,8" HeaderIcon="{ui:FontIcon Glyph=&#xE8A7;}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <ToggleSwitch IsOn="{Binding Enabled, Mode=TwoWay}" Tag="{Binding Id}" Toggled="ModuleToggled" />
+                                <ComboBox Width="105" SelectedValue="{Binding Alignment, Mode=TwoWay}" SelectedValuePath="Content" Tag="{Binding Id}" SelectionChanged="AlignmentChanged">
+                                    <ComboBoxItem Content="Left" />
+                                    <ComboBoxItem Content="Center" />
+                                    <ComboBoxItem Content="Right" />
+                                </ComboBox>
+                                <Button Content="↑" Tag="{Binding Id}" ToolTipService.ToolTip="Move module earlier" Click="MoveUpClicked" />
+                                <Button Content="↓" Tag="{Binding Id}" ToolTipService.ToolTip="Move module later" Click="MoveDownClicked" />
+                            </StackPanel>
+                        </controls:SettingsCard>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

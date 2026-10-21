@@ -8,7 +8,7 @@
         <StackPanel Spacing="18" HorizontalAlignment="Stretch">
             <StackPanel Spacing="4">
                 <TextBlock Text="Scrolling Window Manager" FontSize="30" FontWeight="SemiBold" />
-                <TextBlock Text="Windows live in one horizontal workspace. Focus a window to bring its column into view, then move left or right to browse." FontSize="14" Opacity="0.72" TextWrapping="Wrap" />
+                <TextBlock Text="Monolith has its own numbered workspaces, independent of Windows virtual desktops. Each workspace keeps its own scrolling window layout." FontSize="14" Opacity="0.72" TextWrapping="Wrap" />
             </StackPanel>
 
             <InfoBar IsOpen="True"
@@ -18,6 +18,9 @@
                      Message="Use native title-bar dragging to reorder windows or move them between columns. Alt+Arrow keys or Alt+H/J/K/L navigates; Alt+Shift+V tiles vertically; Ctrl+Alt+Shift+H/J/K/L resizes." />
 
             <TextBlock Text="Workspace layout" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
+            <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
+                     Title="Vertical workspaces"
+                     Message="Alt+Shift+Up/Down changes workspace. Alt+Shift+PageUp/PageDown moves the focused window. Alt+1–9 jumps directly to a workspace. These workspaces are separate from Windows virtual desktops." />
             <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
                      Title="Centered scrolling workspace"
                      Message="The focused window stays centered as you navigate. New windows open in the focused position; adjacent columns remain available by scrolling." />

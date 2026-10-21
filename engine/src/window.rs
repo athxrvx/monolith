@@ -2,27 +2,32 @@ use std::{
   collections::HashSet, ffi::OsString, os::windows::ffi::OsStringExt,
 };
 
-use windows_sys::Win32::{
-  Foundation::{BOOL, HWND, LPARAM, POINT, RECT},
-  Graphics::{
-    Dwm::DwmGetWindowAttribute,
-    Gdi::{
-      GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO,
-      MONITOR_DEFAULTTONEAREST,
+use windows_sys::{
+  core::PCWSTR,
+  Win32::{
+    Foundation::{BOOL, HWND, LPARAM, POINT, RECT},
+    Graphics::{
+      Dwm::DwmGetWindowAttribute,
+      Gdi::{
+        GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO,
+        MONITOR_DEFAULTTONEAREST,
+      },
     },
-  },
-  System::Threading::{
-    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
-    PROCESS_QUERY_LIMITED_INFORMATION,
-  },
-  UI::WindowsAndMessaging::{
-    BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows,
-    GetClassNameW, GetWindow, GetWindowLongPtrW, GetWindowRect,
-    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
-    IsIconic, IsWindow, IsWindowVisible, IsZoomed, SetWindowLongPtrW,
-    SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, GW_OWNER, HDWP,
-    SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SW_RESTORE,
-    WS_CAPTION, WS_CHILD, WS_EX_TOOLWINDOW, WS_THICKFRAME,
+    System::Threading::{
+      OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+      PROCESS_QUERY_LIMITED_INFORMATION,
+    },
+    UI::WindowsAndMessaging::{
+      BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows,
+      GetClassNameW, GetDesktopWindow, GetPropW, GetShellWindow, GetWindow, GetWindowLongPtrW,
+      GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
+      GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
+      IsZoomed, RemovePropW, SetPropW, SetWindowLongPtrW, SetWindowPos,
+      SetForegroundWindow, ShowWindow, GWL_EXSTYLE, GWL_STYLE, GW_OWNER, HDWP, SWP_NOACTIVATE,
+      SWP_NOOWNERZORDER, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOWNA,
+      WS_CAPTION, WS_CHILD, WS_EX_TOOLWINDOW, WS_THICKFRAME,
+    },
+    UI::Input::KeyboardAndMouse::{SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEINPUT},
   },
 };
 
@@ -33,6 +38,91 @@ use crate::{
 
 pub const DWMWA_CLOAKED: u32 = 14;
 const DWMWA_EXTENDED_FRAME_BOUNDS: u32 = 9;
+const WORKSPACE_PROPERTY: PCWSTR =
+  windows_sys::core::w!("Monolith.Workspace");
+const WORKSPACE_HIDDEN_PROPERTY: PCWSTR =
+  windows_sys::core::w!("Monolith.WorkspaceHidden");
+
+/// The workspace assignment is stored on the HWND so it survives an engine
+/// restart while the application window remains open.
+pub fn window_workspace(hwnd: HWND) -> Option<usize> {
+  unsafe {
+    let value = GetPropW(hwnd, WORKSPACE_PROPERTY);
+    (!value.is_null()).then_some(value as usize)
+  }
+}
+
+pub fn assign_window_workspace(hwnd: HWND, workspace: usize) {
+  unsafe {
+    SetPropW(hwnd, WORKSPACE_PROPERTY, workspace as _);
+  }
+}
+
+/// Returns true when a window is currently eligible to activate its Monolith
+/// workspace. A taskbar click can restore a workspace-minimized window before
+/// the engine's next scan, so the marker alone must not block activation.
+pub fn is_active_workspace_window(hwnd: HWND) -> bool {
+  unsafe {
+    IsWindow(hwnd) != 0
+      && IsWindowVisible(hwnd) != 0
+      && IsIconic(hwnd) == 0
+  }
+}
+
+/// Move keyboard focus to the Explorer desktop when the active workspace has
+/// no windows, so the previous app no longer appears to own that workspace.
+pub fn focus_desktop() {
+  unsafe {
+    let input = [INPUT {
+      r#type: INPUT_MOUSE,
+      Anonymous: INPUT_0 {
+        mi: MOUSEINPUT {
+          dx: 0,
+          dy: 0,
+          mouseData: 0,
+          dwFlags: 0,
+          time: 0,
+          dwExtraInfo: 6379,
+        },
+      },
+    }];
+    let _ = SendInput(1, input.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+    let shell = GetShellWindow();
+    let desktop = if shell.is_null() { GetDesktopWindow() } else { shell };
+    let _ = SetForegroundWindow(desktop);
+  }
+}
+
+/// Hide workspace windows directly instead of minimizing them. Windows
+/// minimize animations are separate from Monolith's slide and make a switch
+/// look like a second, conflicting transition.
+pub fn hide_for_workspace(hwnd: HWND) {
+  unsafe {
+    if GetPropW(hwnd, WORKSPACE_HIDDEN_PROPERTY).is_null()
+      && IsWindowVisible(hwnd) != 0
+      && IsIconic(hwnd) == 0
+    {
+      if SetPropW(hwnd, WORKSPACE_HIDDEN_PROPERTY, 1usize as _) != 0 {
+        ShowWindow(hwnd, SW_HIDE);
+      }
+    }
+  }
+}
+
+pub fn is_hidden_for_workspace(hwnd: HWND) -> bool {
+  unsafe { !GetPropW(hwnd, WORKSPACE_HIDDEN_PROPERTY).is_null() }
+}
+
+pub fn show_from_workspace(hwnd: HWND) -> bool {
+  unsafe {
+    if !GetPropW(hwnd, WORKSPACE_HIDDEN_PROPERTY).is_null() {
+      RemovePropW(hwnd, WORKSPACE_HIDDEN_PROPERTY);
+      ShowWindow(hwnd, SW_SHOWNA);
+      return true;
+    }
+  }
+  false
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -101,7 +191,11 @@ impl WindowManager {
       // EnumWindows includes hidden top-level windows. Keep windows we
       // already manage so workspace switches can restore them, while
       // still ignoring unrelated hidden UI.
-      if !previously_managed && !is_manageable_window(hwnd) {
+      let assigned_workspace = window_workspace(hwnd).is_some();
+      if !previously_managed
+        && !assigned_workspace
+        && !is_manageable_window(hwnd)
+      {
         continue;
       }
       if previously_managed && unsafe { IsWindow(hwnd) } == 0 {
@@ -471,8 +565,8 @@ pub fn get_monitor_rect_for_window(hwnd: HWND) -> Rect {
 }
 
 /// Returns the physical monitor bounds and work area containing a pointer
-/// location. Edge navigation uses the physical bounds for hit detection and
-/// the monitor handle to keep each scrolling strip independent.
+/// location. Edge navigation uses the physical bounds for hit detection
+/// and the monitor handle to keep each scrolling strip independent.
 pub fn monitor_at_point(x: i32, y: i32) -> Option<(isize, Rect)> {
   unsafe {
     let point = POINT { x, y };

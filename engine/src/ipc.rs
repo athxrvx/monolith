@@ -131,7 +131,7 @@ async fn handle_client(
                                 let resp = serde_json::to_string(&state)? + "\n";
                                 writer.write_all(resp.as_bytes()).await?;
                             }
-                            "SET_STATE" | "FOCUS_WORKSPACE" | "FOCUS_DIRECTION" | "MOVE_WINDOW" | "TOGGLE_FLOATING" | "TOGGLE_VERTICAL_TILE" | "RESIZE_WINDOW" | "TOGGLE_MONOCLE" | "RELOAD_CONFIG" => {
+                            "SET_STATE" | "FOCUS_WORKSPACE" | "FOCUS_WORKSPACE_DELTA" | "FOCUS_DIRECTION" | "MOVE_WINDOW_DIRECTION" | "MOVE_WINDOW" | "MOVE_WINDOW_WORKSPACE_DELTA" | "TOGGLE_FLOATING" | "TOGGLE_VERTICAL_TILE" | "RESIZE_WINDOW" | "TOGGLE_MONOCLE" | "RELOAD_CONFIG" => {
                                 let _ = action_tx.send(req).await;
                             }
                             _ => {}

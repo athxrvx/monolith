@@ -9,6 +9,8 @@ Monolith is an open-source scrolling window manager and desktop companion for Wi
 ## Features
 
 - Scrolling window management with columns and vertical window arrangements
+- Nine Monolith-managed workspaces with vertical navigation, independent of Windows virtual desktops
+- Move windows between Monolith workspaces while preserving each workspace's layout
 - Keyboard navigation and window-management shortcuts
 - A launcher available with `Alt + Space`
 - A WinUI 3 settings app for engine controls, layout, window rules, appearance, and hotkeys
@@ -17,11 +19,9 @@ Monolith is an open-source scrolling window manager and desktop companion for Wi
 
 ## Components
 
-- `studio/` contains the WinUI 3 application and settings pages.
+- `studio/` contains the WinUI 3 app, settings pages, launcher, tray controls, and engine supervisor.
 - `engine/` contains the Rust window-management engine.
-- `launcher/` contains shared launcher and engine-supervision source and the embedded engine resource.
 - `installer/` contains the per-user Windows installer and uninstaller source.
-- `packages/` contains Rust workspace libraries and command-line tools.
 
 ## Requirements
 
@@ -32,28 +32,23 @@ Monolith is an open-source scrolling window manager and desktop companion for Wi
 
 ## Build from source
 
-Run these commands from the repository root in PowerShell:
+Run this from the repository root in PowerShell to build the engine, embed it in the app, publish Monolith, and create the setup executable in one output folder:
 
 ```powershell
-# Build the window-management engine
-cargo build --release --manifest-path engine/Cargo.toml --bin monolith_engine
-
-# Update the engine binary embedded by the WinUI app
-Copy-Item target\release\monolith_engine.exe launcher\Assets\monolith_engine.exe -Force
-
-# Publish the self-contained WinUI 3 app
-dotnet publish studio\Monolith.Studio.csproj -c Release -r win-x64 --self-contained true -o publish
+powershell -ExecutionPolicy Bypass -File resources\scripts\build-release.ps1
 ```
 
-Run `publish\Monolith.exe`. Keep the published support files alongside the executable.
+The unified `publish/` folder contains `Monolith.exe`, its support files, and `Monolith-Setup.exe`. Run `publish\Monolith.exe` for the portable published app or `publish\Monolith-Setup.exe` to install it.
 
-To build the per-user installer after publishing the app:
+To create only the setup executable after publishing the app:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File installer\Build-Installer.ps1
+powershell -ExecutionPolicy Bypass -File installer\Build-Installer.ps1 -AppPublishDirectory publish -OutputDirectory publish
 ```
 
-The installer is written to `publish\Monolith-Setup.exe`.
+## Updating
+
+See [UPDATING.md](UPDATING.md) for upgrade and configuration-retention details.
 
 ## Configuration
 
@@ -64,6 +59,8 @@ Monolith stores per-user configuration in:
 ```
 
 Hotkeys and window-management settings can be changed in the settings app.
+
+The default workspace shortcuts are `Alt + Shift + Up/Down` to move between workspaces, `Alt + Shift + PageUp/PageDown` to move the focused window, and `Alt + 1` through `Alt + 9` to jump to a numbered workspace. Inactive workspace windows are minimized so their taskbar buttons remain available; activating one returns to its Monolith workspace.
 
 ## Inspirations
 

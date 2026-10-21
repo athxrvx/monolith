@@ -19,14 +19,8 @@ pub struct EngineConfig {
   #[serde(default = "default_info")]
   pub log_level: String,
 
-  #[serde(default = "default_four")]
-  pub default_workspace_count: usize,
-
   #[serde(default = "default_true")]
   pub wrap_around: bool,
-
-  #[serde(default = "default_unified")]
-  pub workspace_binding_mode: String,
 
   #[serde(default = "default_true")]
   pub focus_follows_cursor: bool,
@@ -113,12 +107,6 @@ fn default_true() -> bool {
 fn default_info() -> String {
   "Info".to_string()
 }
-fn default_four() -> usize {
-  4
-}
-fn default_unified() -> String {
-  "Unified".to_string()
-}
 fn default_scrolling() -> String {
   "Scrolling".to_string()
 }
@@ -173,9 +161,7 @@ impl Default for EngineConfig {
       edge_navigation_enabled: true,
       hide_taskbar: false,
       log_level: default_info(),
-      default_workspace_count: 4,
       wrap_around: true,
-      workspace_binding_mode: default_unified(),
       focus_follows_cursor: true,
       layout_mode: default_scrolling(),
       outer_gaps_top: 12,

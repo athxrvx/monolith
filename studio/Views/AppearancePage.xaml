@@ -39,10 +39,10 @@
                     <x:String>Pure OLED Dark</x:String>
                 </ComboBox>
             </controls:SettingsCard>
-            <controls:SettingsCard Header="Launcher surface opacity" Description="Darkness tint over the desktop background (20%–100%)." HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
+            <controls:SettingsCard Header="Launcher surface opacity" Description="Tint strength for Acrylic and Mica. Pure OLED Dark stays fully opaque." HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
                 <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <Slider Width="200" Minimum="20" Maximum="100" Value="{x:Bind ViewModel.Config.LauncherOpacity, Mode=TwoWay}" ValueChanged="OnSliderChanged" />
-                    <TextBlock Text="{x:Bind ViewModel.Config.LauncherOpacity, Mode=OneWay}" Foreground="#60CDFF" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Slider x:Name="LauncherOpacitySlider" Width="200" Minimum="20" Maximum="100" Value="{x:Bind ViewModel.Config.LauncherOpacity, Mode=TwoWay}" ValueChanged="OnSliderChanged" />
+                    <TextBlock x:Name="LauncherOpacityValue" Text="60" Foreground="#60CDFF" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </StackPanel>
             </controls:SettingsCard>
 

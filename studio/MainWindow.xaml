@@ -51,6 +51,11 @@
                         <FontIcon Glyph="&#xE737;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem Content="Monobar" Tag="Monobar">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8A7;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Content="Window Rules" Tag="Rules">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8B7;"/>

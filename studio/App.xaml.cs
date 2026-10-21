@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using Microsoft.UI.Xaml;
 using Monolith.Studio.ViewModels;
@@ -11,13 +12,29 @@ namespace Monolith.Studio;
 public partial class App : Application
 {
     private const int SwRestore = 9;
+    private const int SwShow = 5;
+    private const int GwlpExStyle = -20;
+    private const long WsExToolWindow = 0x80;
     private static Mutex? _singleInstanceMutex;
+    private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr parameter);
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hwnd, int command);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr parameter);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
 
     private Window? _window;
     public static MainViewModel MainViewModel { get; } = new();
@@ -43,9 +60,13 @@ public partial class App : Application
         try
         {
             WriteStartupLog("Launch received", null);
-            if (!TryAcquireSingleInstance())
+            WriteStartupLog("Single-instance check started", null);
+            bool isFirstInstance = TryAcquireSingleInstance();
+            WriteStartupLog($"Single-instance check finished: {(isFirstInstance ? "first instance" : "existing instance found")}", null);
+            if (!isFirstInstance)
             {
-                ActivateExistingInstance();
+                bool activated = ActivateExistingInstance();
+                WriteStartupLog($"Existing instance activation: {(activated ? "window restored" : "window not found")}", null);
                 Current.Exit();
                 return;
             }
@@ -87,7 +108,7 @@ public partial class App : Application
         return false;
     }
 
-    private static void ActivateExistingInstance()
+    private static bool ActivateExistingInstance()
     {
         foreach (var process in Process.GetProcessesByName("Monolith"))
         {
@@ -96,14 +117,28 @@ public partial class App : Application
                 if (process.Id == Environment.ProcessId)
                     continue;
 
-                process.Refresh();
-                var hwnd = process.MainWindowHandle;
-                if (hwnd == IntPtr.Zero)
+                IntPtr targetWindow = IntPtr.Zero;
+                int targetPid = process.Id;
+                EnumWindows((hwnd, _) =>
+                {
+                    GetWindowThreadProcessId(hwnd, out uint ownerPid);
+                    if (ownerPid != targetPid) return true;
+                    if ((GetWindowLongPtr(hwnd, GwlpExStyle).ToInt64() & WsExToolWindow) != 0) return true;
+                    var title = new StringBuilder(128);
+                    GetWindowText(hwnd, title, title.Capacity);
+                    if (!string.Equals(title.ToString(), "Monolith", StringComparison.OrdinalIgnoreCase)) return true;
+                    targetWindow = hwnd;
+                    return false;
+                }, IntPtr.Zero);
+
+                if (targetWindow == IntPtr.Zero)
                     continue;
 
-                ShowWindow(hwnd, SwRestore);
-                SetForegroundWindow(hwnd);
-                return;
+                ShowWindow(targetWindow, SwShow);
+                ShowWindow(targetWindow, SwRestore);
+                bool foregrounded = SetForegroundWindow(targetWindow);
+                WriteStartupLog($"Activated settings window for process {targetPid}; foreground request: {foregrounded}", null);
+                return true;
             }
             catch (Exception ex)
             {
@@ -114,6 +149,7 @@ public partial class App : Application
                 process.Dispose();
             }
         }
+        return false;
     }
 
     private static async System.Threading.Tasks.Task InitializeViewModelAsync()
@@ -127,6 +163,7 @@ public partial class App : Application
             if (App.Current is App app && app._window is MainWindow mainWindow)
             {
                 mainWindow.SetLauncherAvailable(MainViewModel.Config.MonolithEnabled && MainViewModel.Config.LauncherEnabled);
+                mainWindow.ApplyMonobarConfiguration();
                 if (!MainViewModel.Config.OnboardingCompleted)
                     await mainWindow.ShowOnboardingIfNeededAsync();
             }

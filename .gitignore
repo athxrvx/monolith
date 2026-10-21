@@ -13,7 +13,6 @@
 # Published applications and installers
 /publish/
 /publish_*/
-/out/
 
 # Temporary build and release staging
 /.build-*/
@@ -35,4 +34,3 @@ Desktop.ini
 # Local secrets
 *.pem
 *.env
-/.wix/

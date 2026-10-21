@@ -46,6 +46,12 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<HotkeyBinding> _hotkeyBindings = new();
 
+    [ObservableProperty]
+    private ObservableCollection<MonobarModuleConfig> _monobarModules = new();
+
+    [ObservableProperty]
+    private int _activeWorkspace = 1;
+
     public MainViewModel()
     {
         _ipcClient.ConnectionChanged += OnConnectionChanged;
@@ -58,6 +64,7 @@ public partial class MainViewModel : ObservableObject
 
         WindowRules = new ObservableCollection<WindowRule>(Config.WindowRules);
         HotkeyBindings = new ObservableCollection<HotkeyBinding>(Config.Hotkeys);
+        MonobarModules = new ObservableCollection<MonobarModuleConfig>(Config.MonobarModules ?? MonobarModuleConfig.CreateDefaults());
 
         await _ipcClient.StartAsync();
         if (Config.MonolithEnabled && Config.EngineStartup && !_engineSupervisor.IsRunning)
@@ -85,12 +92,25 @@ public partial class MainViewModel : ObservableObject
                 EnginePid = 0;
                 EngineRamUsage = "0.0 MB";
             }
+            App.MainWindowInstance?.RefreshMonobarState();
         });
     }
 
     private void OnStateReceived(string json)
     {
-        _dispatcherQueue.TryEnqueue(UpdateEngineProcessInfo);
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.TryGetProperty("active_workspace", out var workspace)
+                    && workspace.TryGetInt32(out int activeWorkspace))
+                    ActiveWorkspace = Math.Clamp(activeWorkspace, 1, 9);
+            }
+            catch (JsonException) { }
+            UpdateEngineProcessInfo();
+            App.MainWindowInstance?.RefreshMonobarState();
+        });
     }
 
     public void UpdateEngineProcessInfo()
@@ -112,11 +132,17 @@ public partial class MainViewModel : ObservableObject
         {
             Config.WindowRules = new System.Collections.Generic.List<WindowRule>(WindowRules);
             Config.Hotkeys = new System.Collections.Generic.List<HotkeyBinding>(HotkeyBindings);
+            Config.MonobarModules = new System.Collections.Generic.List<MonobarModuleConfig>(MonobarModules.OrderBy(module => module.Order));
             await ConfigService.SaveConfigAsync(Config);
 
             // Push SET_STATE to engine
             await _ipcClient.SendCommandAsync("SET_STATE", Config);
-            _dispatcherQueue.TryEnqueue(() => App.RefreshHotkeys?.Invoke());
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                App.RefreshHotkeys?.Invoke();
+                App.MainWindowInstance?.ApplyLauncherAppearance();
+                App.MainWindowInstance?.ApplyMonobarConfiguration();
+            });
         }
         finally
         {
@@ -130,7 +156,9 @@ public partial class MainViewModel : ObservableObject
         Config = await ConfigService.LoadConfigAsync();
         WindowRules = new ObservableCollection<WindowRule>(Config.WindowRules);
         HotkeyBindings = new ObservableCollection<HotkeyBinding>(Config.Hotkeys);
+        MonobarModules = new ObservableCollection<MonobarModuleConfig>(Config.MonobarModules ?? MonobarModuleConfig.CreateDefaults());
         await _ipcClient.SendCommandAsync("RELOAD_CONFIG");
+        App.MainWindowInstance?.ApplyMonobarConfiguration();
     }
 
     [RelayCommand]
@@ -201,28 +229,72 @@ public partial class MainViewModel : ObservableObject
         await SaveConfigAsync();
     }
 
-    public void SwitchNativeDesktop(bool next) => VirtualDesktopNav.MoveOneDesktop(next);
+    public async Task SwitchWorkspaceAsync(int workspace)
+    {
+        bool sent = await _ipcClient.SendCommandAsync("FOCUS_WORKSPACE", new { workspace });
+        App.LogStartup($"Workspace switch command to {workspace}: {(sent ? "sent" : "IPC unavailable")}");
+    }
+
+    public void MoveMonobarModule(string id, int offset)
+    {
+        int index = -1;
+        for (int i = 0; i < MonobarModules.Count; i++)
+        {
+            if (string.Equals(MonobarModules[i].Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        int target = index + Math.Sign(offset);
+        if (index < 0 || target < 0 || target >= MonobarModules.Count) return;
+        MonobarModules.Move(index, target);
+        for (int i = 0; i < MonobarModules.Count; i++)
+            MonobarModules[i].Order = i;
+        Config.MonobarModules = MonobarModules.OrderBy(module => module.Order).ToList();
+        _ = SaveConfigAsync();
+    }
+
+    public async Task NavigateWorkspaceAsync(int delta)
+    {
+        await _ipcClient.SendCommandAsync("FOCUS_WORKSPACE_DELTA", new { delta });
+    }
 
     public async Task FocusDirectionAsync(string direction)
     {
         await _ipcClient.SendCommandAsync("FOCUS_DIRECTION", new { direction });
     }
 
-    public void MoveActiveWindowToDesktop(bool next) => VirtualDesktopNav.MoveActiveWindowOneDesktop(next);
-
-    public async Task ToggleFloatingAsync()
+    public async Task MoveWindowDirectionAsync(string direction)
     {
-        await _ipcClient.SendCommandAsync("TOGGLE_FLOATING");
+        await _ipcClient.SendCommandAsync("MOVE_WINDOW_DIRECTION", new { direction });
     }
 
-    public async Task ToggleVerticalTileAsync()
+    public async Task MoveActiveWindowWorkspaceAsync(int delta)
     {
-        await _ipcClient.SendCommandAsync("TOGGLE_VERTICAL_TILE");
+        await _ipcClient.SendCommandAsync("MOVE_WINDOW_WORKSPACE_DELTA", new { delta });
     }
 
-    public async Task ToggleMonocleAsync()
+    public async Task MoveActiveWindowToWorkspaceAsync(int workspace, long? hwnd = null)
     {
-        await _ipcClient.SendCommandAsync("TOGGLE_MONOCLE");
+        bool sent = await _ipcClient.SendCommandAsync("MOVE_WINDOW", new { workspace, hwnd });
+        App.LogStartup($"Move focused window to workspace {workspace}: {(sent ? "sent" : "IPC unavailable")}");
+    }
+
+    public async Task ToggleFloatingAsync(long? hwnd = null)
+    {
+        await _ipcClient.SendCommandAsync("TOGGLE_FLOATING", new { hwnd });
+    }
+
+    public async Task ToggleVerticalTileAsync(long? hwnd = null)
+    {
+        await _ipcClient.SendCommandAsync("TOGGLE_VERTICAL_TILE", new { hwnd });
+    }
+
+    public async Task ToggleMonocleAsync(long? hwnd = null)
+    {
+        await _ipcClient.SendCommandAsync("TOGGLE_MONOCLE", new { hwnd });
     }
 
     public async Task ResizeActiveWindowAsync(string axis, int direction)

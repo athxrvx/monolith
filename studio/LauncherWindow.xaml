@@ -4,35 +4,70 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Monolith.Studio"
     Title="Launcher">
-    <Border Background="#E51F1F1F"
-            BorderBrush="#38FFFFFF"
+    <Border x:Name="LauncherSurface"
+            Background="#E61C1C1C"
+            BorderBrush="#26FFFFFF"
             BorderThickness="1"
             CornerRadius="8"
-            Padding="14,12,14,9">
-        <Grid RowSpacing="8" KeyDown="Root_KeyDown">
+            Padding="12">
+        <Border.Resources>
+            <SolidColorBrush x:Key="LauncherSecondaryTextBrush" Color="#C8C8C8" />
+            <SolidColorBrush x:Key="LauncherTertiaryTextBrush" Color="#999999" />
+        </Border.Resources>
+        <Grid RowSpacing="10" KeyDown="Root_KeyDown">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <AutoSuggestBox x:Name="SearchBox"
-                            Grid.Row="0"
-                            Height="40"
-                            FontSize="15"
-                            PlaceholderText="Search apps and tools"
-                            TextChanged="SearchBox_TextChanged"
-                            QuerySubmitted="SearchBox_QuerySubmitted"
-                            KeyDown="Root_KeyDown">
-                <AutoSuggestBox.QueryIcon>
-                    <SymbolIcon Symbol="Find" />
-                </AutoSuggestBox.QueryIcon>
-            </AutoSuggestBox>
+            <Grid Grid.Row="0" ColumnSpacing="12" Padding="2,0,2,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <AutoSuggestBox x:Name="SearchBox"
+                                Grid.Column="0"
+                                MinHeight="42"
+                                FontSize="17"
+                                Padding="0"
+                                PlaceholderText="Search apps and commands"
+                                TextChanged="SearchBox_TextChanged"
+                                QuerySubmitted="SearchBox_QuerySubmitted"
+                                KeyDown="Root_KeyDown">
+                    <AutoSuggestBox.QueryIcon>
+                        <SymbolIcon Symbol="Find" />
+                    </AutoSuggestBox.QueryIcon>
+                </AutoSuggestBox>
+            </Grid>
 
-            <Grid Grid.Row="1">
-                <ListView x:Name="ResultsList"
+            <Grid Grid.Row="1" ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.72*" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+                <Border Background="{StaticResource SurfaceElevatedBrush}"
+                        BorderBrush="#24FFFFFF" BorderThickness="1"
+                        CornerRadius="8" Padding="6,5,3,5">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Padding="8,3,8,7">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Results" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource LauncherTertiaryTextBrush}" />
+                            <Button Grid.Column="1" Content="Commands" Padding="8,2" MinHeight="28"
+                                    FontSize="12"
+                                    Click="ActionsButton_Click" />
+                        </Grid>
+                        <ListView x:Name="ResultsList" Grid.Row="1"
                           IsItemClickEnabled="True"
                           ItemClick="ResultsList_ItemClick"
+                          SelectionChanged="ResultsList_SelectionChanged"
                           SelectionMode="Single"
                           Background="Transparent"
                           BorderThickness="0"
@@ -42,51 +77,94 @@
                           ScrollViewer.VerticalScrollMode="Auto"
                           ScrollViewer.VerticalScrollBarVisibility="Auto"
                           KeyDown="Root_KeyDown">
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="MinHeight" Value="48" />
-                            <Setter Property="Padding" Value="6,2" />
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        </Style>
-                    </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="local:LauncherResult">
-                            <Grid ColumnSpacing="9" Padding="3,1">
+                            <Grid ColumnSpacing="10" Padding="2,0">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="30" />
+                                    <ColumnDefinition Width="34" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Grid Width="26" Height="26" VerticalAlignment="Center">
-                                    <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" Foreground="#55D6E2"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    <Image Stretch="Uniform" Loaded="ResultIcon_Loaded" />
-                                </Grid>
-                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{x:Bind Title}" FontSize="13" FontWeight="SemiBold"
+                                <Border Width="30" Height="30" CornerRadius="6"
+                                        Background="{StaticResource SurfaceHigherBrush}"
+                                        VerticalAlignment="Center">
+                                    <Grid>
+                                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="15" Foreground="{StaticResource AccentBlueBrush}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Image Stretch="Uniform" Loaded="ResultIcon_Loaded" Margin="3" />
+                                    </Grid>
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind Title}" FontSize="12" FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{x:Bind Subtitle}" FontSize="10" Opacity="0.62"
+                                    <TextBlock Text="{x:Bind Subtitle}" FontSize="10"
+                                               Foreground="{StaticResource LauncherTertiaryTextBrush}"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <TextBlock Grid.Column="2" Text="{x:Bind Category}" FontSize="10" Opacity="0.55"
-                                           VerticalAlignment="Center" Margin="8,0,6,0" />
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>
                 </ListView>
-                <TextBlock x:Name="EmptyStateText" Text="No matches" Visibility="Collapsed"
-                           VerticalAlignment="Center" HorizontalAlignment="Center"
-                           Opacity="0.58" FontSize="12" />
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource SurfaceElevatedBrush}"
+                        BorderBrush="#24FFFFFF" BorderThickness="1"
+                        CornerRadius="8" Padding="14">
+                    <Grid x:Name="PreviewPanel">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Preview" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource LauncherSecondaryTextBrush}" />
+                        <StackPanel Grid.Row="1" Spacing="10" VerticalAlignment="Center">
+                            <Border Width="72" Height="72" CornerRadius="8"
+                                    Background="{StaticResource SurfaceHigherBrush}"
+                                    HorizontalAlignment="Center">
+                                <Grid>
+                                    <FontIcon x:Name="PreviewGlyph" Glyph="&#xE721;" FontSize="34"
+                                              Foreground="{StaticResource AccentBlueBrush}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Image x:Name="PreviewIcon" Stretch="Uniform" Margin="12" />
+                                </Grid>
+                            </Border>
+                            <TextBlock x:Name="PreviewTitle" Text="Find something" FontSize="16" FontWeight="SemiBold"
+                                       TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxLines="2" />
+                            <TextBlock x:Name="PreviewSubtitle" Text="Your apps and commands appear here"
+                                       FontSize="11" TextAlignment="Center" TextWrapping="WrapWholeWords"
+                                       Foreground="{StaticResource LauncherSecondaryTextBrush}" MaxLines="3" />
+                        </StackPanel>
+                        <Border x:Name="PreviewCategoryPill" Grid.Row="2"
+                                Background="{StaticResource SurfaceHigherBrush}" CornerRadius="4"
+                                Padding="8,4" HorizontalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock x:Name="PreviewCategory" FontSize="10"
+                                       Foreground="{StaticResource LauncherSecondaryTextBrush}" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <StackPanel x:Name="EmptyState" Visibility="Collapsed" Spacing="6"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <FontIcon x:Name="EmptyStateIcon" Glyph="&#xE721;" FontSize="20" Opacity="0.7"
+                              HorizontalAlignment="Center" />
+                    <TextBlock x:Name="EmptyStateText" Text="No matches" Opacity="0.68" FontSize="12"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
             </Grid>
 
-            <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid Grid.Row="2" ColumnSpacing="14" Padding="4,2,4,1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="ResultCountText" VerticalAlignment="Center" Opacity="0.55" FontSize="12" />
-                <TextBlock Grid.Column="1" Text="↑ ↓ Navigate   Enter Open   Esc Close"
-                           VerticalAlignment="Center" Opacity="0.55" FontSize="10" />
+                <TextBlock x:Name="ResultCountText" VerticalAlignment="Center"
+                           Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="11" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock Text="↑↓ Navigate" Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="10" />
+                    <TextBlock Text="↵ Open" Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="10" />
+                    <TextBlock Text="Esc Close" Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="10" />
+                </StackPanel>
             </Grid>
         </Grid>
     </Border>

@@ -37,6 +37,7 @@ public sealed partial class MainWindow : Window
 
     private readonly WorkspaceHotkeyService _workspaceHotkeys;
     private readonly LauncherWindow _launcherWindow;
+    private readonly MonobarWindow _monobarWindow;
     private readonly TrayIconService? _trayIconService;
     private bool _allowWindowClose;
 
@@ -59,7 +60,9 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
 
         _launcherWindow = new LauncherWindow();
+        _launcherWindow.RequestOpenSettings = OpenSettingsPage;
         App.MainWindowInstance = this;
+        _monobarWindow = new MonobarWindow();
         _workspaceHotkeys = new WorkspaceHotkeyService(windowHandle, App.MainViewModel.HotkeyBindings, OnHotkeyPressed);
         App.RefreshHotkeys = () => _workspaceHotkeys.ReloadBindings(App.MainViewModel.HotkeyBindings);
         App.SetHotkeysEnabled = _workspaceHotkeys.SetEnabled;
@@ -90,9 +93,14 @@ public sealed partial class MainWindow : Window
             App.RefreshHotkeys = null;
             App.SetHotkeysEnabled = null;
             App.MainWindowInstance = null;
-            _workspaceHotkeys.Dispose();
-            _launcherWindow.Close();
-            _trayIconService?.Dispose();
+            try { _workspaceHotkeys.Dispose(); }
+            catch (Exception ex) { App.LogStartup("Failed to dispose workspace hotkeys", ex); }
+            try { _launcherWindow.Close(); }
+            catch (Exception ex) { App.LogStartup("Failed to close launcher window", ex); }
+            try { _monobarWindow.Close(); }
+            catch (Exception ex) { App.LogStartup("Failed to close Monobar", ex); }
+            try { _trayIconService?.Dispose(); }
+            catch (Exception ex) { App.LogStartup("Failed to remove the tray icon", ex); }
         };
 
         // Use the WinUI Acrylic backdrop supported by the app's current Windows App SDK runtime.
@@ -121,6 +129,31 @@ public sealed partial class MainWindow : Window
         Activate();
     }
 
+    private void OpenSettingsPage(string page)
+    {
+        foreach (var candidate in NavView.MenuItems)
+        {
+            if (candidate is NavigationViewItem item
+                && string.Equals(item.Tag?.ToString(), page, StringComparison.OrdinalIgnoreCase))
+            {
+                NavView.SelectedItem = item;
+                break;
+            }
+        }
+        NavigateToPage(page);
+        ShowSettingsWindow();
+    }
+
+    public void ApplyLauncherAppearance() => _launcherWindow.ApplyAppearance();
+
+    public void ApplyMonobarConfiguration() => _monobarWindow.ApplyConfiguration();
+
+    public void RefreshMonobarState() => _monobarWindow.RefreshModules();
+
+    public void ToggleLauncher() => ShowLauncher();
+
+    public void ShowMonolithSettings(string page) => OpenSettingsPage(page);
+
     private void ShowLauncher()
     {
         if (App.MainViewModel.Config.MonolithEnabled && App.MainViewModel.Config.LauncherEnabled)
@@ -129,23 +162,31 @@ public sealed partial class MainWindow : Window
 
     public void SetLauncherAvailable(bool enabled)
     {
+        ApplyLauncherAppearance();
         if (!enabled)
             _launcherWindow.HidePalette();
     }
 
     private void ExitCompletely()
     {
+        if (_allowWindowClose) return;
         _allowWindowClose = true;
-        App.MainViewModel.StopEngine();
-        Close();
-        App.Current.Exit();
+        try { App.MainViewModel.StopEngine(); }
+        catch (Exception ex) { App.LogStartup("Failed to stop engine during complete exit", ex); }
+        try { Close(); }
+        catch (Exception ex) { App.LogStartup("Failed to close settings window during complete exit", ex); }
+        finally { App.Current.Exit(); }
     }
 
     private void OnHotkeyPressed(Monolith.Studio.Models.HotkeyBinding binding)
     {
         if (!App.MainViewModel.Config.MonolithEnabled)
+        {
+            App.LogStartup($"Ignored hotkey '{binding.Binding}' because Monolith is disabled");
             return;
+        }
         string action = binding.Action.Trim();
+        App.LogStartup($"Routing hotkey action: {action}");
         if (action.Equals("Toggle Launcher", StringComparison.OrdinalIgnoreCase))
         {
             ShowLauncher();
@@ -154,21 +195,40 @@ public sealed partial class MainWindow : Window
         {
             _ = App.MainViewModel.FocusDirectionAsync(action[6..].ToLowerInvariant());
         }
-        else if (action.Equals("Next Desktop", StringComparison.OrdinalIgnoreCase))
+        else if (action.StartsWith("Move Window ", StringComparison.OrdinalIgnoreCase)
+            && action is "Move Window Left" or "Move Window Right" or "Move Window Up" or "Move Window Down")
         {
-            App.MainViewModel.SwitchNativeDesktop(true);
+            _ = App.MainViewModel.MoveWindowDirectionAsync(action[12..].ToLowerInvariant());
         }
-        else if (action.Equals("Previous Desktop", StringComparison.OrdinalIgnoreCase))
+        else if (action.Equals("Next Workspace", StringComparison.OrdinalIgnoreCase)
+            || action.Equals("Next Desktop", StringComparison.OrdinalIgnoreCase))
         {
-            App.MainViewModel.SwitchNativeDesktop(false);
+            _ = App.MainViewModel.NavigateWorkspaceAsync(1);
         }
-        else if (action.Equals("Move Window to Next Desktop", StringComparison.OrdinalIgnoreCase))
+        else if (action.Equals("Previous Workspace", StringComparison.OrdinalIgnoreCase)
+            || action.Equals("Previous Desktop", StringComparison.OrdinalIgnoreCase))
         {
-            App.MainViewModel.MoveActiveWindowToDesktop(true);
+            _ = App.MainViewModel.NavigateWorkspaceAsync(-1);
         }
-        else if (action.Equals("Move Window to Previous Desktop", StringComparison.OrdinalIgnoreCase))
+        else if (action.Equals("Move Window to Next Workspace", StringComparison.OrdinalIgnoreCase)
+            || action.Equals("Move Window to Next Desktop", StringComparison.OrdinalIgnoreCase))
         {
-            App.MainViewModel.MoveActiveWindowToDesktop(false);
+            _ = App.MainViewModel.MoveActiveWindowWorkspaceAsync(1);
+        }
+        else if (action.Equals("Move Window to Previous Workspace", StringComparison.OrdinalIgnoreCase)
+            || action.Equals("Move Window to Previous Desktop", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = App.MainViewModel.MoveActiveWindowWorkspaceAsync(-1);
+        }
+        else if (action.StartsWith("Move Window to Workspace ", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(action[25..], out int targetWorkspace))
+        {
+            _ = App.MainViewModel.MoveActiveWindowToWorkspaceAsync(targetWorkspace);
+        }
+        else if (action.StartsWith("Switch to Workspace ", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(action[20..], out int workspace))
+        {
+            _ = App.MainViewModel.SwitchWorkspaceAsync(workspace);
         }
         else if (action.Equals("Toggle Float", StringComparison.OrdinalIgnoreCase))
         {
@@ -343,6 +403,7 @@ public sealed partial class MainWindow : Window
     {
         Type pageType = tag switch
         {
+            "Monobar" => typeof(MonobarPage),
             "Tiling" => typeof(TilingPage),
             "Rules" => typeof(RulesPage),
             "Appearance" => typeof(AppearancePage),
@@ -356,6 +417,7 @@ public sealed partial class MainWindow : Window
         BreadcrumbTitle.Text = tag switch
         {
             "Tiling" => "Scrolling Window Manager",
+            "Monobar" => "Monobar",
             "Rules" => "Window Routing Rules",
             "Appearance" => "Appearance & Themes",
             "Hotkeys" => "Keyboard Shortcuts & Hotkeys",

@@ -296,6 +296,52 @@ impl ScrollWorkspace {
     Some(*target as HWND)
   }
 
+  /// Move the focused window through the column/stack order without
+  /// changing focus. Horizontal movement reorders columns (or detaches a
+  /// stacked window into a neighboring column); vertical movement reorders
+  /// windows within their current column.
+  pub fn move_window(&mut self, focused: HWND, direction: &str) {
+    let id = focused as isize;
+    let Some(column_index) = self.columns.iter().position(|column| column.windows.contains(&id)) else {
+      return;
+    };
+    let window_index = self.columns[column_index].windows.iter().position(|window| *window == id).unwrap();
+    match direction {
+      "up" if window_index > 0 => {
+        self.columns[column_index].windows.swap(window_index, window_index - 1);
+        self.columns[column_index].height_weights.swap(window_index, window_index - 1);
+      }
+      "down" if window_index + 1 < self.columns[column_index].windows.len() => {
+        self.columns[column_index].windows.swap(window_index, window_index + 1);
+        self.columns[column_index].height_weights.swap(window_index, window_index + 1);
+      }
+      "left" if column_index > 0 => {
+        if self.columns[column_index].windows.len() == 1 {
+          self.columns.swap(column_index, column_index - 1);
+        } else {
+          let width = self.columns[column_index].width;
+          self.columns[column_index].windows.remove(window_index);
+          self.columns[column_index].height_weights.remove(window_index);
+          normalize_weights(&mut self.columns[column_index].height_weights);
+          self.columns.insert(column_index - 1, ScrollColumn { windows: vec![id], width, height_weights: vec![1.0] });
+        }
+      }
+      "right" if column_index + 1 < self.columns.len() => {
+        if self.columns[column_index].windows.len() == 1 {
+          self.columns.swap(column_index, column_index + 1);
+        } else {
+          let width = self.columns[column_index].width;
+          self.columns[column_index].windows.remove(window_index);
+          self.columns[column_index].height_weights.remove(window_index);
+          normalize_weights(&mut self.columns[column_index].height_weights);
+          self.columns.insert(column_index + 1, ScrollColumn { windows: vec![id], width, height_weights: vec![1.0] });
+        }
+      }
+      _ => {}
+    }
+    self.last_focused = Some(id);
+  }
+
   /// Toggle vertical stacking by consuming the next column's focused
   /// window, or expelling the focused window back into its own
   /// horizontal column.

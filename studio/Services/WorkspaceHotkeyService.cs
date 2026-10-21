@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 using Monolith.Studio.Models;
 
 namespace Monolith.Studio.Services;
@@ -49,6 +50,9 @@ public sealed class WorkspaceHotkeyService : IDisposable
         _subclassProc = WindowProc;
 
         _subclassInstalled = SetWindowSubclass(_hwnd, _subclassProc, (UIntPtr)SubclassId, UIntPtr.Zero);
+        App.LogStartup(_subclassInstalled
+            ? "Workspace hotkey window hook installed"
+            : $"Workspace hotkey window hook FAILED (Win32 error {Marshal.GetLastWin32Error()})");
         ReloadBindings(bindings);
     }
 
@@ -73,6 +77,7 @@ public sealed class WorkspaceHotkeyService : IDisposable
         if (!_enabled) return;
 
         int hotkeyId = FirstHotkeyId;
+        int registeredCount = 0;
         foreach (var binding in _currentBindings)
         {
             if (!TryParseBinding(binding.Binding, out uint modifiers, out uint key)) continue;
@@ -81,8 +86,17 @@ public sealed class WorkspaceHotkeyService : IDisposable
             {
                 _registeredIds.Add(currentId);
                 _bindings[currentId] = binding;
+                registeredCount++;
+            }
+            else
+            {
+                int error = Marshal.GetLastWin32Error();
+                string message = $"Could not register hotkey '{binding.Binding}' for '{binding.Action}' (Win32 error {error}).";
+                Debug.WriteLine(message);
+                App.LogStartup(message);
             }
         }
+        App.LogStartup($"Registered {registeredCount} of {_currentBindings.Count} configured global hotkeys");
     }
 
     private IntPtr WindowProc(IntPtr hwnd, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr referenceData)
@@ -92,6 +106,7 @@ public sealed class WorkspaceHotkeyService : IDisposable
             int hotkeyMessageId = unchecked((int)wParam.ToUInt64());
             if (_bindings.TryGetValue(hotkeyMessageId, out var binding))
             {
+                App.LogStartup($"Global hotkey fired: {binding.Binding} -> {binding.Action}");
                 _hotkeyPressed(binding);
                 return IntPtr.Zero;
             }
