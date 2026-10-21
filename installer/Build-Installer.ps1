@@ -15,7 +15,9 @@ if (-not (Test-Path (Join-Path $appPublish 'Monolith.exe'))) {
 }
 New-Item -ItemType Directory -Force -Path $staging | Out-Null
 New-Item -ItemType Directory -Force -Path $output | Out-Null
-cargo build --release --manifest-path (Join-Path $root 'engine/Cargo.toml') --bin monolith_uninstall
+
+$uninstallerOutput = Join-Path $staging 'uninstaller-output'
+dotnet publish (Join-Path $PSScriptRoot 'MonolithSetup.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:StartupObject=UninstallProgram -p:AssemblyName=MonolithUninstall -o $uninstallerOutput
 if ($LASTEXITCODE -ne 0) { throw 'Uninstaller build failed.' }
 
 $payloadRoot = Join-Path $staging 'payload'
@@ -24,7 +26,7 @@ New-Item -ItemType Directory -Force -Path $payloadRoot | Out-Null
 Get-ChildItem -LiteralPath $appPublish -Force |
     Where-Object { $_.Name -notin @('Monolith-Setup.exe', 'Monolith-Setup.pdb', 'Monolith-Setup.deps.json', 'Monolith-Setup.runtimeconfig.json') } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $payloadRoot -Recurse -Force }
-Copy-Item (Join-Path $root 'target/release/monolith_uninstall.exe') (Join-Path $payloadRoot 'MonolithUninstall.exe') -Force
+Copy-Item (Join-Path $uninstallerOutput 'MonolithUninstall.exe') (Join-Path $payloadRoot 'MonolithUninstall.exe') -Force
 if (Test-Path $payload) { Remove-Item -LiteralPath $payload -Force }
 Compress-Archive -Path (Join-Path $payloadRoot '*') -DestinationPath $payload -CompressionLevel Optimal
 

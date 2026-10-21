@@ -10,9 +10,9 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <StartupObject>SetupProgram</StartupObject>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="obj\InstallerStaging\Monolith-Payload.zip" LogicalName="Monolith.Payload.zip" />
-    <Compile Remove="UninstallProgram.cs" />
+    <EmbeddedResource Include="obj\InstallerStaging\Monolith-Payload.zip" LogicalName="Monolith.Payload.zip" Condition="Exists('obj\InstallerStaging\Monolith-Payload.zip')" />
   </ItemGroup>
 </Project>
