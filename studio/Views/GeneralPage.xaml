@@ -31,8 +31,8 @@
                     </StackPanel>
                 </controls:SettingsCard>
 
-                <controls:SettingsCard Header="Launch engine at sign-in"
-                                       Description="Start Monolith automatically when you sign in to Windows."
+                <controls:SettingsCard Header="Run Monolith at sign-in"
+                                       Description="Start Monolith in the notification area when you sign in to Windows."
                                        HeaderIcon="{ui:FontIcon Glyph=&#xE713;}">
                     <ToggleSwitch IsOn="{x:Bind ViewModel.Config.EngineStartup, Mode=TwoWay}" Toggled="OnSettingChanged" />
                 </controls:SettingsCard>
@@ -57,10 +57,10 @@
                     <ToggleSwitch IsOn="{x:Bind ViewModel.Config.RunLauncherAdmin, Mode=TwoWay}" Toggled="OnSettingChanged" />
                 </controls:SettingsCard>
 
-                <controls:SettingsCard Header="Hide the taskbar automatically"
-                                       Description="Let managed windows use the full display area."
+                <controls:SettingsCard Header="Hide the Windows taskbar completely"
+                                       Description="Keep the taskbar hidden while Monolith is running. Turn this off to restore it."
                                        HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.Config.HideTaskbar, Mode=TwoWay}" Toggled="OnSettingChanged" />
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.Config.HideTaskbar, Mode=TwoWay}" Toggled="TaskbarVisibility_Toggled" />
                 </controls:SettingsCard>
             </StackPanel>
 

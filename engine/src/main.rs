@@ -50,9 +50,7 @@ async fn main() -> anyhow::Result<()> {
   let (action_tx, mut action_rx) = mpsc::channel::<IpcRequest>(64);
   let (move_size_tx, mut move_size_rx) =
     mpsc::unbounded_channel::<(isize, bool, tiling::Rect, i32, i32)>();
-  let (pointer_tx, mut pointer_rx) =
-    mpsc::unbounded_channel::<interactions::PointerInput>();
-  interactions::start_move_size_listener(move_size_tx, pointer_tx);
+  interactions::start_move_size_listener(move_size_tx);
 
   // Spawn IPC server
   let server_config = config.clone();
@@ -188,13 +186,13 @@ async fn main() -> anyhow::Result<()> {
             for ((monitor, workspace_id), windows) in &windows_by_workspace {
                 if let Some(hwnd) = windows.first() {
                     let screen = get_monitor_rect_for_window(*hwnd);
-                    // PaperWM-style columns use the available viewport width by
-                    // default. This makes the focused column honor both side gaps;
-                    // users can still resize a column explicitly.
-                    let initial_width = (screen.width - current_cfg.outer_gaps_left - current_cfg.outer_gaps_right)
-                        .max(current_cfg.min_width).min(screen.width.max(1));
+                    let usable_width = (screen.width - current_cfg.outer_gaps_left - current_cfg.outer_gaps_right)
+                        .max(1);
+                    let initial_width = ((usable_width * 90) / 100)
+                        .max(current_cfg.min_width).min(usable_width);
                     let workspace = scroll_workspaces.entry((*monitor, *workspace_id)).or_default();
                     workspace.sync(windows, initial_width);
+                    layout_engine.inner_gap = current_cfg.inner_gaps;
                     let rects = workspace.compute_layout(screen, &layout_engine, foreground);
                     for (window, rect) in rects {
                         targets.insert(window as isize, rect);
@@ -219,9 +217,9 @@ async fn main() -> anyhow::Result<()> {
                     last_targets.insert(hwnd, target);
                 }
 
-                let duration = Duration::from_millis(current_cfg.reflow_duration.clamp(80, 400) as u64);
                 let mut frame = Vec::with_capacity(animations.len());
                 let mut finished = Vec::new();
+                let duration = Duration::from_millis(current_cfg.reflow_duration.clamp(80, 400) as u64);
                 for (&hwnd, animation) in &animations {
                     if user_dragging.contains(&hwnd) { continue; }
                     let progress = (now.duration_since(animation.started).as_secs_f64() / duration.as_secs_f64()).clamp(0.0, 1.0);
@@ -292,56 +290,6 @@ async fn main() -> anyhow::Result<()> {
                 // Animate from the released position to its updated tiled slot.
                 last_targets.remove(&hwnd);
                 animations.remove(&hwnd);
-            }
-        }
-
-        Some(input) = pointer_rx.recv() => {
-            match input {
-                interactions::PointerInput::Wheel { hwnd, direction } => {
-                    let foreground = if hwnd == 0 { unsafe { GetForegroundWindow() } } else { hwnd as _ };
-                    let key = workspace_key(&window_workspaces, active_workspace.load(Ordering::SeqCst), foreground);
-                    let direction_name = if direction > 0 { "right" } else { "left" };
-                    if let Some(target) = scroll_workspaces.get(&key).and_then(|workspace| workspace.focus(foreground, direction_name)) {
-                        unsafe { SetForegroundWindow(target); }
-                    }
-                }
-                interactions::PointerInput::EdgeClick { hwnd, x, y } => {
-                    if !current_cfg.edge_navigation_enabled {
-                        continue;
-                    }
-                    if let Some((monitor, bounds)) = window::monitor_at_point(x, y) {
-                        // A small physical-screen hit zone keeps normal clicks
-                        // untouched while making edge navigation work on every
-                        // monitor, including when an app window has focus.
-                        const EDGE_ZONE: i32 = 40;
-                        let direction = if x < bounds.x + EDGE_ZONE {
-                            Some("left")
-                        } else if x >= bounds.x + bounds.width - EDGE_ZONE {
-                            Some("right")
-                        } else {
-                            None
-                        };
-                        if let Some(direction) = direction {
-                            let clicked_window = if hwnd == 0 {
-                                unsafe { GetForegroundWindow() as isize }
-                            } else {
-                                hwnd
-                            };
-                            let key = (monitor, active_workspace.load(Ordering::SeqCst));
-                            if let Some(workspace) = scroll_workspaces.get(&key) {
-                                // Use the foreground captured synchronously by
-                                // the mouse hook. The frame loop can update its
-                                // focus cache before this queued event is read.
-                                if let Some(target) = workspace.focus(clicked_window as _, direction) {
-                                    unsafe {
-                                        windows_sys::Win32::UI::WindowsAndMessaging::BringWindowToTop(target);
-                                        SetForegroundWindow(target);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -456,7 +404,7 @@ async fn main() -> anyhow::Result<()> {
                     let direction = req.args.get("direction").and_then(|v| v.as_str()).unwrap_or("");
                     let foreground = unsafe { GetForegroundWindow() };
                     let key = workspace_key(&window_workspaces, active_workspace.load(Ordering::SeqCst), foreground);
-                    if let Some(target) = scroll_workspaces.get(&key).and_then(|workspace| workspace.focus(foreground, direction)) {
+                    if let Some(target) = scroll_workspaces.get(&key).and_then(|workspace| workspace.focus(foreground, direction, current_cfg.wrap_around)) {
                         unsafe { SetForegroundWindow(target); }
                     }
                 }

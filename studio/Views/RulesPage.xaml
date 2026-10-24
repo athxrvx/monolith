@@ -12,28 +12,8 @@
                 <TextBlock Text="Define automatic window behavior, floating overrides, and border visibility." FontSize="14" Opacity="0.72" />
             </StackPanel>
 
-            <TextBlock Text="Rule builder" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
-            <controls:SettingsCard Header="Process executable name"
-                                   Description="Match the application process, for example spotify.exe or code.exe."
-                                   HeaderIcon="{ui:FontIcon Glyph=&#xE9D9;}">
-                <TextBox x:Name="InputProcessName" Width="300" PlaceholderText="e.g. spotify.exe, code.exe" />
-            </controls:SettingsCard>
-            <controls:SettingsCard Header="Window title regex"
-                                   Description="Optionally match a window title with a regular expression."
-                                   HeaderIcon="{ui:FontIcon Glyph=&#xE8A5;}">
-                <TextBox x:Name="InputTitleRegex" Width="300" Text=".*" PlaceholderText="e.g. .* - Visual Studio" />
-            </controls:SettingsCard>
-            <controls:SettingsCard Header="Window action"
-                                   Description="Choose whether matching windows tile, float, or stay outside the layout."
-                                   HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
-                <ComboBox x:Name="ComboAction" Width="220" SelectedIndex="0">
-                    <x:String>Force Tile</x:String>
-                    <x:String>Force Float</x:String>
-                    <x:String>Ignore Tiling</x:String>
-                </ComboBox>
-            </controls:SettingsCard>
             <controls:SettingsCard Header="Rule actions"
-                                   Description="Add the rule or export your current rules as JSON."
+                                   Description="Create a window rule or export your current rules as JSON."
                                    HeaderIcon="{ui:FontIcon Glyph=&#xE8A5;}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Add rule" Style="{StaticResource AccentButtonStyle}" Click="AddRule_Click" />
@@ -41,17 +21,11 @@
                 </StackPanel>
             </controls:SettingsCard>
 
-            <controls:SettingsCard Header="Manage border visibility"
-                                   Description="Suppress standard OS title bars for seamless borderless window docking."
-                                   HeaderIcon="{ui:FontIcon Glyph=&#xE7C1;}">
-                <ToggleSwitch x:Name="ToggleManageBorder" IsOn="True" />
-            </controls:SettingsCard>
-
             <TextBlock Text="Active rules" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
             <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
                      Title="Active rules"
                      Message="Rules are evaluated automatically as matching windows open." />
-            <TextBlock Text="{x:Bind ViewModel.WindowRules.Count, Mode=OneWay}" HorizontalAlignment="Right" Foreground="#60CDFF" FontWeight="SemiBold" />
+            <TextBlock Text="{x:Bind ViewModel.WindowRules.Count, Mode=OneWay}" HorizontalAlignment="Right" Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold" />
             <ListView x:Name="RulesListView"
                       ItemsSource="{x:Bind ViewModel.WindowRules, Mode=OneWay}"
                       SelectionMode="Single"
@@ -64,7 +38,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="{x:Bind Action}"
                                         Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                                        Foreground="#60CDFF"
+                                        Foreground="{StaticResource AccentBlueBrush}"
                                         FontWeight="SemiBold"
                                         Padding="10,4"
                                         IsHitTestVisible="False" />

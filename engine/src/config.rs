@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, io::Read, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,9 +9,6 @@ pub struct EngineConfig {
 
   #[serde(default)]
   pub run_launcher_admin: bool,
-
-  #[serde(default = "default_true")]
-  pub edge_navigation_enabled: bool,
 
   #[serde(default)]
   pub hide_taskbar: bool,
@@ -158,7 +155,6 @@ impl Default for EngineConfig {
     Self {
       engine_startup: true,
       run_launcher_admin: false,
-      edge_navigation_enabled: true,
       hide_taskbar: false,
       log_level: default_info(),
       wrap_around: true,
@@ -217,15 +213,19 @@ pub fn load_config() -> EngineConfig {
     .map(PathBuf::from)
     .map(|app_data| app_data.join("Monolith").join("config.json"));
 
-  let current_content = fs::read_to_string(&path);
+  let current_content = read_bounded_config(&path);
   let (content, is_legacy) = match current_content {
     Ok(content) => (Some(content), false),
-    Err(_) => (
-      legacy_path
-        .as_ref()
-        .and_then(|legacy| fs::read_to_string(legacy).ok()),
-      true,
-    ),
+    Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+      return EngineConfig::default();
+    }
+    Err(_) => match legacy_path.as_ref().map(read_bounded_config) {
+      Some(Ok(content)) => (Some(content), true),
+      Some(Err(error)) if error.kind() == std::io::ErrorKind::InvalidData => {
+        return EngineConfig::default();
+      }
+      _ => (None, true),
+    },
   };
 
   if let Some(content) = content {
@@ -240,6 +240,21 @@ pub fn load_config() -> EngineConfig {
   let default = EngineConfig::default();
   let _ = save_config(&default);
   default
+}
+
+const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
+
+fn read_bounded_config(path: &PathBuf) -> std::io::Result<String> {
+  let file = fs::File::open(path)?;
+  let mut content = String::new();
+  file.take(MAX_CONFIG_BYTES + 1).read_to_string(&mut content)?;
+  if content.len() as u64 > MAX_CONFIG_BYTES {
+    return Err(std::io::Error::new(
+      std::io::ErrorKind::InvalidData,
+      "configuration exceeds 1 MiB limit",
+    ));
+  }
+  Ok(content)
 }
 
 pub fn save_config(cfg: &EngineConfig) -> anyhow::Result<()> {

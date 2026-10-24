@@ -17,21 +17,57 @@ public sealed partial class RulesPage : Page
         InitializeComponent();
     }
 
-    private void AddRule_Click(object sender, RoutedEventArgs e)
+    private async void AddRule_Click(object sender, RoutedEventArgs e)
     {
-        string process = InputProcessName.Text?.Trim() ?? string.Empty;
+        var processName = new TextBox
+        {
+            Header = "Process executable name",
+            PlaceholderText = "e.g. spotify.exe, code.exe",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var titleRegex = new TextBox
+        {
+            Header = "Window title regex",
+            Text = ".*",
+            PlaceholderText = "e.g. .* - Visual Studio",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var action = new ComboBox
+        {
+            Header = "Window action",
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        action.Items.Add("Force Tile");
+        action.Items.Add("Force Float");
+        action.Items.Add("Ignore Tiling");
+
+        var form = new StackPanel { Spacing = 12, MinWidth = 420 };
+        form.Children.Add(processName);
+        form.Children.Add(titleRegex);
+        form.Children.Add(action);
+        var dialog = new ContentDialog
+        {
+            Title = "Add window rule",
+            Content = form,
+            PrimaryButtonText = "Add rule",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        string process = processName.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(process)) return;
 
         var rule = new WindowRule
         {
             ProcessName = process,
-            TitleRegex = string.IsNullOrEmpty(InputTitleRegex.Text) ? ".*" : InputTitleRegex.Text.Trim(),
-            Action = ComboAction.SelectedValue?.ToString() ?? "Force Tile",
-            ManageBorderVisibility = ToggleManageBorder.IsOn
+            TitleRegex = string.IsNullOrEmpty(titleRegex.Text) ? ".*" : titleRegex.Text.Trim(),
+            Action = action.SelectedItem?.ToString() ?? "Force Tile"
         };
 
         ViewModel.AddRule(rule);
-        InputProcessName.Text = string.Empty;
     }
 
     private void DeleteRule_Click(object sender, RoutedEventArgs e)

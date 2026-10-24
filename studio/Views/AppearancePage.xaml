@@ -11,6 +11,19 @@
                 <TextBlock Text="Customize active focus outlines, frosted glass materials, and window motion animations." FontSize="14" Opacity="0.72" />
             </StackPanel>
 
+            <TextBlock Text="Accent color" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
+            <controls:SettingsCard Header="Interface accent" Description="Follow your Windows accent color or choose a custom color for Monolith." HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <ComboBox x:Name="AccentModeCombo" Width="180" SelectionChanged="OnAccentModeChanged">
+                        <ComboBoxItem Content="Windows default" />
+                        <ComboBoxItem Content="Manual" />
+                    </ComboBox>
+                    <Button x:Name="ChooseAccentButton" Content="Choose color" Click="ChooseAccentColor_Click" />
+                    <Border x:Name="AccentPreview" Width="22" Height="22" CornerRadius="11" BorderThickness="1" BorderBrush="#80FFFFFF" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AccentHex" VerticalAlignment="Center" Opacity="0.72" />
+                </StackPanel>
+            </controls:SettingsCard>
+
             <!-- Parked until the engine overlay is enabled in a future release.
             <TextBlock Text="Focus border" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
             <controls:SettingsCard Header="Active window border" Description="Show an accent outline around the currently focused window." HeaderIcon="{ui:FontIcon Glyph=&#xE7C1;}">
@@ -25,26 +38,10 @@
             <controls:SettingsCard Header="Border thickness" Description="Width of the window outline in pixels (1–8)." HeaderIcon="{ui:FontIcon Glyph=&#xE7C1;}">
                 <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                     <Slider Width="200" Minimum="1" Maximum="8" Value="{x:Bind ViewModel.Config.BorderThickness, Mode=TwoWay}" ValueChanged="OnSliderChanged" />
-                    <TextBlock Text="{x:Bind ViewModel.Config.BorderThickness, Mode=OneWay}" Foreground="#60CDFF" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{x:Bind ViewModel.Config.BorderThickness, Mode=OneWay}" Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </StackPanel>
             </controls:SettingsCard>
             -->
-
-            <TextBlock Text="Launcher" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
-            <controls:SettingsCard Header="Backdrop material" Description="Choose the Windows 11 composition material for the command palette." HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
-                <ComboBox SelectedValue="{x:Bind ViewModel.Config.BackdropMaterial, Mode=TwoWay}" SelectionChanged="OnSelectionChanged" Width="220">
-                    <x:String>Acrylic (Frosted Glass)</x:String>
-                    <x:String>Mica</x:String>
-                    <x:String>Mica Alt</x:String>
-                    <x:String>Pure OLED Dark</x:String>
-                </ComboBox>
-            </controls:SettingsCard>
-            <controls:SettingsCard Header="Launcher surface opacity" Description="Tint strength for Acrylic and Mica. Pure OLED Dark stays fully opaque." HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
-                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <Slider x:Name="LauncherOpacitySlider" Width="200" Minimum="20" Maximum="100" Value="{x:Bind ViewModel.Config.LauncherOpacity, Mode=TwoWay}" ValueChanged="OnSliderChanged" />
-                    <TextBlock x:Name="LauncherOpacityValue" Text="60" Foreground="#60CDFF" FontWeight="SemiBold" VerticalAlignment="Center" />
-                </StackPanel>
-            </controls:SettingsCard>
 
             <TextBlock Text="Window motion" FontSize="18" FontWeight="SemiBold" Margin="2,8,0,0" />
             <controls:SettingsCard Header="Window reflow animations" Description="Choose None (disabled), Minimal (60 Hz), or Smooth (120 Hz)." HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
@@ -57,9 +54,10 @@
             <controls:SettingsCard Header="Reflow duration" Description="Transition time for window rearrangements, in milliseconds (50–300)." HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
                 <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                     <Slider Width="200" Minimum="50" Maximum="300" StepFrequency="10" Value="{x:Bind ViewModel.Config.ReflowDuration, Mode=TwoWay}" ValueChanged="OnSliderChanged" />
-                    <TextBlock Text="{x:Bind ViewModel.Config.ReflowDuration, Mode=OneWay}" Foreground="#60CDFF" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Text="{x:Bind ViewModel.Config.ReflowDuration, Mode=OneWay}" Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </StackPanel>
             </controls:SettingsCard>
         </StackPanel>
     </ScrollViewer>
 </Page>
+

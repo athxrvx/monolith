@@ -30,5 +30,9 @@
     <EmbeddedResource Include="Assets\monolith_engine.exe" />
     <Content Include="..\assets\monolith_icon.ico" Link="Assets\monolith_icon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\assets\monolith.png" Link="Assets\monolith.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\MonoDockFluentIcons\*.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\MonoDockFluentIcons\COPYING" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\MonoDockFluentIcons\README.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
 </Project>

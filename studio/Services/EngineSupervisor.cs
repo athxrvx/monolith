@@ -1,13 +1,34 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace Monolith.Services;
 
 public sealed class EngineSupervisor
 {
+    private const int SwShowNoActivate = 8;
+    private const string WorkspaceHiddenProperty = "Monolith.WorkspaceHidden";
+
+    private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "EnumWindows")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "GetPropW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetProp(IntPtr hwnd, string name);
+
+    [DllImport("user32.dll", EntryPoint = "RemovePropW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr RemoveProp(IntPtr hwnd, string name);
+
+    [DllImport("user32.dll", EntryPoint = "ShowWindow")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hwnd, int command);
+
     private static readonly Lazy<EngineSupervisor> _instance = new(() => new EngineSupervisor());
     public static EngineSupervisor Instance => _instance.Value;
 
@@ -159,7 +180,27 @@ public sealed class EngineSupervisor
             }
         }
 
+        RestoreWorkspaceHiddenWindows();
+
         StateChanged?.Invoke(false);
+    }
+
+    private static void RestoreWorkspaceHiddenWindows()
+    {
+        // Monolith workspaces use SW_HIDE. If the engine exits, no scan loop
+        // remains to show windows assigned to inactive workspaces again.
+        // Remove the marker before showing each window so a later engine run
+        // can establish visibility from the persisted workspace assignment.
+        EnumWindows((hwnd, _) =>
+        {
+            if (GetProp(hwnd, WorkspaceHiddenProperty) != IntPtr.Zero)
+            {
+                RemoveProp(hwnd, WorkspaceHiddenProperty);
+                ShowWindow(hwnd, SwShowNoActivate);
+            }
+
+            return true;
+        }, IntPtr.Zero);
     }
 
     private static T ReadExternalEngineProcess<T>(Func<Process, T> read, T fallback)
@@ -226,15 +267,32 @@ public sealed class EngineSupervisor
                         var fi = new FileInfo(_targetExePath);
                         if (fi.Length == stream.Length)
                         {
-                            needExtract = false;
+                            stream.Position = 0;
+                            byte[] embeddedHash = SHA256.HashData(stream);
+                            using var existing = new FileStream(_targetExePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                            byte[] existingHash = SHA256.HashData(existing);
+                            needExtract = !CryptographicOperations.FixedTimeEquals(embeddedHash, existingHash);
                         }
                     }
 
                     if (needExtract)
                     {
+                        stream.Position = 0;
                         // Stop any existing instance before overwriting
                         var procs = Process.GetProcessesByName("monolith_engine");
-                        foreach (var p in procs) { try { p.Kill(); } catch { } }
+                        foreach (var p in procs)
+                        {
+                            try
+                            {
+                                if (!p.HasExited)
+                                {
+                                    p.Kill();
+                                    p.WaitForExit(2000);
+                                }
+                            }
+                            catch { }
+                            finally { p.Dispose(); }
+                        }
 
                         using var fs = new FileStream(_targetExePath, FileMode.Create, FileAccess.Write);
                         stream.CopyTo(fs);

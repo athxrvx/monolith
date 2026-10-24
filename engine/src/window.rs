@@ -622,11 +622,13 @@ fn evaluate_rules(
 }
 
 pub fn get_window_title(hwnd: HWND) -> String {
+  const MAX_WINDOW_TITLE_UNITS: i32 = 32_768;
   unsafe {
     let len = GetWindowTextLengthW(hwnd);
     if len > 0 {
-      let mut buf: Vec<u16> = vec![0; (len + 1) as usize];
-      let read = GetWindowTextW(hwnd, buf.as_mut_ptr(), len + 1);
+      let capacity = len.min(MAX_WINDOW_TITLE_UNITS);
+      let mut buf: Vec<u16> = vec![0; capacity as usize + 1];
+      let read = GetWindowTextW(hwnd, buf.as_mut_ptr(), capacity + 1);
       if read > 0 {
         buf.truncate(read as usize);
         return OsString::from_wide(&buf).to_string_lossy().to_string();

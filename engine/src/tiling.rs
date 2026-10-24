@@ -251,7 +251,15 @@ impl ScrollWorkspace {
     result
   }
 
-  pub fn focus(&self, focused: HWND, direction: &str) -> Option<HWND> {
+  /// Focus an adjacent window in the horizontal scroller or vertical stack.
+  /// When wrapping is enabled, navigation from either end continues at the
+  /// opposite end of that axis.
+  pub fn focus(
+    &self,
+    focused: HWND,
+    direction: &str,
+    wrap_around: bool,
+  ) -> Option<HWND> {
     let id = focused as isize;
     let position = |id: isize| self.columns.iter().enumerate().find_map(|(ci, column)| {
         column
@@ -270,27 +278,29 @@ impl ScrollWorkspace {
           .first()
           .and_then(|column| (!column.windows.is_empty()).then_some((0, 0)))
       })?;
+    let column_count = self.columns.len();
+    let current_column = &self.columns[column_index];
     let target = match direction {
       "left" if column_index > 0 => {
-        self.columns[column_index - 1].windows.get(
-          window_index
-            .min(self.columns[column_index - 1].windows.len() - 1),
-        )
+        let target_column = &self.columns[column_index - 1];
+        target_column.windows.get(window_index.min(target_column.windows.len() - 1))
       }
-      "right" if column_index + 1 < self.columns.len() => {
-        self.columns[column_index + 1].windows.get(
-          window_index
-            .min(self.columns[column_index + 1].windows.len() - 1),
-        )
+      "left" if wrap_around && column_count > 1 => {
+        let target_column = &self.columns[column_count - 1];
+        target_column.windows.get(window_index.min(target_column.windows.len() - 1))
       }
-      "up" if window_index > 0 => {
-        self.columns[column_index].windows.get(window_index - 1)
+      "right" if column_index + 1 < column_count => {
+        let target_column = &self.columns[column_index + 1];
+        target_column.windows.get(window_index.min(target_column.windows.len() - 1))
       }
-      "down"
-        if window_index + 1 < self.columns[column_index].windows.len() =>
-      {
-        self.columns[column_index].windows.get(window_index + 1)
+      "right" if wrap_around && column_count > 1 => {
+        let target_column = &self.columns[0];
+        target_column.windows.get(window_index.min(target_column.windows.len() - 1))
       }
+      "up" if window_index > 0 => current_column.windows.get(window_index - 1),
+      "up" if wrap_around && current_column.windows.len() > 1 => current_column.windows.last(),
+      "down" if window_index + 1 < current_column.windows.len() => current_column.windows.get(window_index + 1),
+      "down" if wrap_around && current_column.windows.len() > 1 => current_column.windows.first(),
       _ => None,
     }?;
     Some(*target as HWND)

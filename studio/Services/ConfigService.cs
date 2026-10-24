@@ -24,7 +24,7 @@ public class ConfigService
             string sourcePath = File.Exists(ConfigPath) ? ConfigPath : LegacyConfigPath;
             if (File.Exists(sourcePath))
             {
-                string json = await File.ReadAllTextAsync(sourcePath);
+                string json = await BoundedFile.ReadAllTextAsync(sourcePath, 1024 * 1024);
                 var config = JsonSerializer.Deserialize<MonolithConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (config != null)
                 {
@@ -39,16 +39,37 @@ public class ConfigService
                     {
                         var previous = oldModules.FirstOrDefault(module =>
                             string.Equals(module.Id, defaultModule.Id, StringComparison.OrdinalIgnoreCase));
+                        if (defaultModule.Id == "system-status" && previous is null)
+                        {
+                            var legacyStatusModules = oldModules.Where(module =>
+                                module.Id is "wifi" or "volume" or "battery").ToList();
+                            if (legacyStatusModules.Count > 0)
+                            {
+                                previous = new MonobarModuleConfig
+                                {
+                                    Id = "system-status",
+                                    Enabled = legacyStatusModules.Any(module => module.Enabled),
+                                    Order = legacyStatusModules.Min(module => module.Order),
+                                    Alignment = legacyStatusModules.FirstOrDefault(module => module.Enabled)?.Alignment
+                                        ?? legacyStatusModules[0].Alignment
+                                };
+                                monobarModulesChanged = true;
+                            }
+                        }
                         migratedMonobarModules.Add(new MonobarModuleConfig
                         {
                             Id = defaultModule.Id,
                             Enabled = previous?.Enabled ?? defaultModule.Enabled,
                             Order = previous?.Order ?? defaultModule.Order,
-                            Alignment = previous?.Alignment ?? defaultModule.Alignment
+                            Alignment = previous?.Alignment ?? defaultModule.Alignment,
+                            WallpaperFolder = previous?.WallpaperFolder ?? defaultModule.WallpaperFolder,
+                            ClockUse24Hour = previous?.ClockUse24Hour ?? defaultModule.ClockUse24Hour,
+                            VisibilityCondition = previous?.VisibilityCondition ?? defaultModule.VisibilityCondition
                         });
                         if (previous is null || !string.Equals(previous.Id, defaultModule.Id, StringComparison.OrdinalIgnoreCase))
                             monobarModulesChanged = true;
                     }
+                    monobarModulesChanged |= oldModules.Count != migratedMonobarModules.Count;
                     config.MonobarModules = migratedMonobarModules;
                     // Migrate legacy BSP/COSMIC preferences to the supported scrolling WM.
                     config.LayoutMode = "Scrolling";
@@ -70,6 +91,9 @@ public class ConfigService
                             addedDefaultBinding = true;
                         }
                     }
+                    if (config.Hotkeys.RemoveAll(binding =>
+                        string.Equals(binding.Action, "Toggle Overview", StringComparison.OrdinalIgnoreCase)) > 0)
+                        addedDefaultBinding = true;
                     int removedConflictingWorkspaceBindings = config.Hotkeys.RemoveAll(binding =>
                         string.Equals(binding.Category, "Workspaces", StringComparison.OrdinalIgnoreCase)
                         && (string.Equals(binding.Action, "Previous Workspace", StringComparison.OrdinalIgnoreCase)
@@ -135,6 +159,8 @@ public class ConfigService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to load config: {ex.Message}");
+            if (ex is InvalidDataException)
+                return new MonolithConfig();
         }
 
         var defaultConfig = new MonolithConfig();
@@ -159,6 +185,45 @@ public class ConfigService
         {
             System.Diagnostics.Debug.WriteLine($"Failed to save config: {ex.Message}");
         }
+    }
+}
+
+internal static class BoundedFile
+{
+    public static async Task<string> ReadAllTextAsync(string path, int maxBytes)
+    {
+        await using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            8192, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        int read;
+        while ((read = await source.ReadAsync(chunk.AsMemory()).ConfigureAwait(false)) != 0)
+        {
+            if (buffer.Length + read > maxBytes)
+                throw new InvalidDataException($"File exceeds the {maxBytes}-byte limit.");
+            buffer.Write(chunk, 0, read);
+        }
+        buffer.Position = 0;
+        using var reader = new StreamReader(buffer, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return await reader.ReadToEndAsync().ConfigureAwait(false);
+    }
+
+    public static string ReadAllText(string path, int maxBytes)
+    {
+        using var source = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            8192, FileOptions.SequentialScan);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        int read;
+        while ((read = source.Read(chunk, 0, chunk.Length)) != 0)
+        {
+            if (buffer.Length + read > maxBytes)
+                throw new InvalidDataException($"File exceeds the {maxBytes}-byte limit.");
+            buffer.Write(chunk, 0, read);
+        }
+        buffer.Position = 0;
+        using var reader = new StreamReader(buffer, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 }
 

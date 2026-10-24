@@ -1,11 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using Microsoft.UI.Xaml;
 using Monolith.Studio.ViewModels;
+using Monolith.Studio.Services;
 
 namespace Monolith.Studio;
 
@@ -37,6 +39,7 @@ public partial class App : Application
     private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
 
     private Window? _window;
+    internal static bool IsBackgroundLaunch { get; private set; }
     public static MainViewModel MainViewModel { get; } = new();
     public static Action? RefreshHotkeys { get; set; }
     public static Action<bool>? SetHotkeysEnabled { get; set; }
@@ -59,7 +62,11 @@ public partial class App : Application
     {
         try
         {
+            IsBackgroundLaunch = string.Equals(args.Arguments?.Trim(), StartupRegistrationService.BackgroundArgument, StringComparison.OrdinalIgnoreCase)
+                || Environment.GetCommandLineArgs().Skip(1).Any(argument =>
+                    string.Equals(argument, StartupRegistrationService.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
             WriteStartupLog("Launch received", null);
+            WriteStartupLog(IsBackgroundLaunch ? "Starting in background mode" : "Starting with settings window", null);
             WriteStartupLog("Single-instance check started", null);
             bool isFirstInstance = TryAcquireSingleInstance();
             WriteStartupLog($"Single-instance check finished: {(isFirstInstance ? "first instance" : "existing instance found")}", null);
@@ -71,11 +78,20 @@ public partial class App : Application
                 return;
             }
 
-            // Show the settings window immediately; config and pipe startup must not gate UI creation.
+            // Construct the shell in both modes so tray actions and hotkeys are available.
             _window = new MainWindow();
             WriteStartupLog("Main window constructed", null);
-            _window.Activate();
-            WriteStartupLog("Main window activated", null);
+            if (IsBackgroundLaunch)
+            {
+                var handle = WinRT.Interop.WindowNative.GetWindowHandle(_window);
+                ShowWindow(handle, 0); // SW_HIDE; keep the settings shell available to tray actions.
+                WriteStartupLog("Settings window kept hidden for background launch", null);
+            }
+            else
+            {
+                _window.Activate();
+                WriteStartupLog("Main window activated", null);
+            }
             _ = InitializeViewModelAsync();
         }
         catch (Exception ex)
@@ -158,14 +174,17 @@ public partial class App : Application
         {
             WriteStartupLog("Settings initialization started", null);
             await MainViewModel.InitializeAsync();
+            StartupRegistrationService.Apply(MainViewModel.Config.EngineStartup);
+            TaskbarVisibilityService.Apply(MainViewModel.Config.HideTaskbar);
+            AccentColorService.RefreshAccent();
             RefreshHotkeys?.Invoke();
             SetHotkeysEnabled?.Invoke(MainViewModel.Config.MonolithEnabled);
-            if (App.Current is App app && app._window is MainWindow mainWindow)
+            if (App.Current is App configuredApp && configuredApp._window is MainWindow configuredMainWindow)
             {
-                mainWindow.SetLauncherAvailable(MainViewModel.Config.MonolithEnabled && MainViewModel.Config.LauncherEnabled);
-                mainWindow.ApplyMonobarConfiguration();
-                if (!MainViewModel.Config.OnboardingCompleted)
-                    await mainWindow.ShowOnboardingIfNeededAsync();
+                configuredMainWindow.SetLauncherAvailable(MainViewModel.Config.MonolithEnabled && MainViewModel.Config.LauncherEnabled);
+                configuredMainWindow.ApplyMonobarConfiguration();
+                if (!IsBackgroundLaunch && !MainViewModel.Config.OnboardingCompleted)
+                    await configuredMainWindow.ShowOnboardingIfNeededAsync();
             }
             WriteStartupLog("Settings initialization finished", null);
         }

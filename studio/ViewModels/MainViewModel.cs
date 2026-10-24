@@ -134,6 +134,8 @@ public partial class MainViewModel : ObservableObject
             Config.Hotkeys = new System.Collections.Generic.List<HotkeyBinding>(HotkeyBindings);
             Config.MonobarModules = new System.Collections.Generic.List<MonobarModuleConfig>(MonobarModules.OrderBy(module => module.Order));
             await ConfigService.SaveConfigAsync(Config);
+            StartupRegistrationService.Apply(Config.EngineStartup);
+            AccentColorService.RefreshAccent();
 
             // Push SET_STATE to engine
             await _ipcClient.SendCommandAsync("SET_STATE", Config);
@@ -142,6 +144,7 @@ public partial class MainViewModel : ObservableObject
                 App.RefreshHotkeys?.Invoke();
                 App.MainWindowInstance?.ApplyLauncherAppearance();
                 App.MainWindowInstance?.ApplyMonobarConfiguration();
+                App.MainWindowInstance?.ApplyMonoDockConfiguration();
             });
         }
         finally
@@ -159,6 +162,7 @@ public partial class MainViewModel : ObservableObject
         MonobarModules = new ObservableCollection<MonobarModuleConfig>(Config.MonobarModules ?? MonobarModuleConfig.CreateDefaults());
         await _ipcClient.SendCommandAsync("RELOAD_CONFIG");
         App.MainWindowInstance?.ApplyMonobarConfiguration();
+        App.MainWindowInstance?.ApplyMonoDockConfiguration();
     }
 
     [RelayCommand]
@@ -222,13 +226,6 @@ public partial class MainViewModel : ObservableObject
         await SaveConfigAsync();
     }
 
-    public async Task SetEdgeNavigationEnabledAsync(bool enabled)
-    {
-        Config.EdgeNavigationEnabled = enabled;
-        OnPropertyChanged(nameof(Config));
-        await SaveConfigAsync();
-    }
-
     public async Task SwitchWorkspaceAsync(int workspace)
     {
         bool sent = await _ipcClient.SendCommandAsync("FOCUS_WORKSPACE", new { workspace });
@@ -253,7 +250,6 @@ public partial class MainViewModel : ObservableObject
         for (int i = 0; i < MonobarModules.Count; i++)
             MonobarModules[i].Order = i;
         Config.MonobarModules = MonobarModules.OrderBy(module => module.Order).ToList();
-        _ = SaveConfigAsync();
     }
 
     public async Task NavigateWorkspaceAsync(int delta)

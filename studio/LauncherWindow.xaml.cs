@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
@@ -18,16 +18,28 @@ using WinRT.Interop;
 
 namespace Monolith.Studio;
 
-public sealed partial class LauncherWindow : Window
+public sealed partial class LauncherWindow : Window, ILauncherWindowController
 {
-    private readonly List<LauncherResult> _allResults = new();
+    private readonly IApplicationCatalog _catalog = new ApplicationCatalog();
+    private readonly ILauncherActivationService _activationService = new LauncherActivationService();
+    private readonly ILauncherSearchService _searchService;
     private readonly AppWindow _appWindow;
     private readonly IntPtr _hwnd;
+    private readonly DispatcherQueueTimer? _resizeTimer;
+    private readonly HashSet<string> _expandedGroups = new(StringComparer.Ordinal);
+    private List<LauncherResult> _allApplications = new();
+    private List<LauncherResult> _applicationStrip = new();
+    private List<LauncherResultGroup> _displayGroups = new();
+    private List<LauncherResult> _visibleResults = new();
+    private CancellationTokenSource _catalogCancellation = new();
+    private Task? _catalogLoadTask;
     private bool _isVisible;
     private bool _launchInProgress;
     private bool _resultsLoaded;
-    private bool _suppressSearchChange;
-    private Task? _resultsLoadTask;
+    private bool _showAllApplications;
+    private bool _lightTheme;
+    private bool _searchBoxFocused;
+    private int _selectedResultIndex = -1;
     private IntPtr _previousForeground;
 
     public Action<string>? RequestOpenSettings { get; set; }
@@ -35,6 +47,16 @@ public sealed partial class LauncherWindow : Window
     public LauncherWindow()
     {
         InitializeComponent();
+        _resizeTimer = DispatcherQueue.GetForCurrentThread()?.CreateTimer();
+        if (_resizeTimer is not null)
+        {
+            _resizeTimer.Interval = TimeSpan.FromMilliseconds(90);
+            _resizeTimer.IsRepeating = false;
+            _resizeTimer.Tick += (_, _) => ResizeToContent();
+        }
+        AppsGrid.Loaded += (_, _) => UpdateApplicationsGridLayout();
+        AppsGrid.SizeChanged += (_, _) => UpdateApplicationsGridLayout();
+        _searchService = new LauncherSearchService(_catalog);
         _hwnd = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
@@ -47,16 +69,7 @@ public sealed partial class LauncherWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
         RemoveNativeFrame(_hwnd);
-        var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
-        var workArea = displayArea.WorkArea;
-        const int width = 660;
-        const int height = 410;
-        _appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
-        _appWindow.Move(new Windows.Graphics.PointInt32
-        {
-            X = workArea.X + (workArea.Width - width) / 2,
-            Y = workArea.Y + (workArea.Height - height) / 2
-        });
+        CenterOnMonitor(IntPtr.Zero);
         ApplyAppearance();
         Activated += (_, args) =>
         {
@@ -71,17 +84,50 @@ public sealed partial class LauncherWindow : Window
     {
         string material = App.MainViewModel.Config.BackdropMaterial;
         bool oled = material.Equals("Pure OLED Dark", StringComparison.OrdinalIgnoreCase);
-        SystemBackdrop = material switch
+        bool lightTheme = !oled && Convert.ToInt32(Registry.GetValue(
+            @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "AppsUseLightTheme", 0)) == 1;
+        _lightTheme = lightTheme;
+        LauncherRoot.RequestedTheme = lightTheme ? ElementTheme.Light : ElementTheme.Dark;
+        try
         {
-            "Mica" => new MicaBackdrop { Kind = MicaKind.Base },
-            "Mica Alt" => new MicaBackdrop { Kind = MicaKind.BaseAlt },
-            "Pure OLED Dark" => null,
-            _ => new DesktopAcrylicBackdrop()
-        };
+            SystemBackdrop = material switch
+            {
+                "Mica" => new MicaBackdrop { Kind = MicaKind.Base },
+                "Mica Alt" => new MicaBackdrop { Kind = MicaKind.BaseAlt },
+                "Pure OLED Dark" => null,
+                _ => new DesktopAcrylicBackdrop()
+            };
+        }
+        catch
+        {
+            SystemBackdrop = null;
+        }
 
-        byte alpha = oled ? (byte)255 : (byte)(Math.Clamp(App.MainViewModel.Config.LauncherOpacity, 20, 100) * 255 / 100);
+        bool backdropUnavailable = !oled && SystemBackdrop is null;
+        byte alpha = oled || backdropUnavailable
+            ? (byte)255
+            : (byte)(Math.Clamp(App.MainViewModel.Config.LauncherOpacity, 20, 100) * 255 / 100);
+        byte surface = lightTheme ? (byte)248 : (byte)28;
         LauncherSurface.Background = new SolidColorBrush(
-            Windows.UI.Color.FromArgb(alpha, oled ? (byte)0 : (byte)28, oled ? (byte)0 : (byte)28, oled ? (byte)0 : (byte)28));
+            Windows.UI.Color.FromArgb(alpha, oled ? (byte)0 : surface, oled ? (byte)0 : surface, oled ? (byte)0 : surface));
+        LauncherSurface.BorderBrush = new SolidColorBrush(lightTheme
+            ? Windows.UI.Color.FromArgb(40, 0, 0, 0)
+            : Windows.UI.Color.FromArgb(48, 255, 255, 255));
+        SearchHeader.Background = new SolidColorBrush(lightTheme
+            ? Windows.UI.Color.FromArgb(20, 0, 0, 0)
+            : Windows.UI.Color.FromArgb(38, 255, 255, 255));
+        UpdateSearchHeaderBorder();
+        if (LauncherSurface.Resources["SurfaceHigherBrush"] is SolidColorBrush surfaceBrush)
+            surfaceBrush.Color = lightTheme ? Windows.UI.Color.FromArgb(255, 232, 232, 232) : Windows.UI.Color.FromArgb(255, 56, 56, 56);
+        if (LauncherSurface.Resources["GroupSurfaceBrush"] is SolidColorBrush groupSurfaceBrush)
+            groupSurfaceBrush.Color = lightTheme ? Windows.UI.Color.FromArgb(24, 0, 0, 0) : Windows.UI.Color.FromArgb(18, 255, 255, 255);
+        if (LauncherSurface.Resources["GroupSurfaceBorderBrush"] is SolidColorBrush groupBorderBrush)
+            groupBorderBrush.Color = lightTheme ? Windows.UI.Color.FromArgb(36, 0, 0, 0) : Windows.UI.Color.FromArgb(24, 255, 255, 255);
+        if (LauncherSurface.Resources["LauncherSecondaryTextBrush"] is SolidColorBrush secondaryBrush)
+            secondaryBrush.Color = lightTheme ? Windows.UI.Color.FromArgb(255, 48, 48, 48) : Windows.UI.Color.FromArgb(255, 212, 212, 212);
+        if (LauncherSurface.Resources["LauncherTertiaryTextBrush"] is SolidColorBrush tertiaryBrush)
+            tertiaryBrush.Color = lightTheme ? Windows.UI.Color.FromArgb(255, 92, 92, 92) : Windows.UI.Color.FromArgb(255, 168, 168, 168);
     }
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -104,17 +150,9 @@ public sealed partial class LauncherWindow : Window
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
-    [DllImport("user32.dll", EntryPoint = "PostMessageW", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool PostWindowMessage(IntPtr hwnd, uint message, UIntPtr wParam, IntPtr lParam);
-
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ShowWindow(IntPtr hwnd, int command);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsZoomed(IntPtr hwnd);
+    private static extern bool IsWindow(IntPtr hwnd);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -123,252 +161,356 @@ public sealed partial class LauncherWindow : Window
     private static void RemoveNativeFrame(IntPtr hwnd)
     {
         const int GwlStyle = -16;
+        const int GwlExStyle = -20;
         const long WsBorder = 0x00800000L;
         const long WsDialogFrame = 0x00400000L;
         const long WsThickFrame = 0x00040000L;
         const long WsCaption = 0x00C00000L;
+        const long WsExAppWindow = 0x00040000L;
+        const long WsExToolWindow = 0x00000080L;
         const uint SwpNoMove = 0x0002;
         const uint SwpNoSize = 0x0001;
         const uint SwpNoZOrder = 0x0004;
         const uint SwpFrameChanged = 0x0020;
 
         long style = GetWindowLongPtr(hwnd, GwlStyle).ToInt64();
-        long framelessStyle = style & ~(WsBorder | WsDialogFrame | WsThickFrame | WsCaption);
-        SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(framelessStyle));
+        SetWindowLongPtr(hwnd, GwlStyle, new IntPtr(style & ~(WsBorder | WsDialogFrame | WsThickFrame | WsCaption)));
+        long extendedStyle = GetWindowLongPtr(hwnd, GwlExStyle).ToInt64();
+        SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr((extendedStyle | WsExToolWindow) & ~WsExAppWindow));
         SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoZOrder | SwpFrameChanged);
 
         uint noBorder = 0xFFFFFFFE;
-        DwmSetWindowAttribute(hwnd, 34, ref noBorder, sizeof(uint)); // DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE
-        uint roundCorners = 2; // DWMWCP_ROUND: use the native Windows 11 corner treatment.
-        DwmSetWindowAttribute(hwnd, 33, ref roundCorners, sizeof(uint)); // DWMWA_WINDOW_CORNER_PREFERENCE
+        DwmSetWindowAttribute(hwnd, 34, ref noBorder, sizeof(uint));
+        uint roundCorners = 2;
+        DwmSetWindowAttribute(hwnd, 33, ref roundCorners, sizeof(uint));
     }
+
+    private void CenterOnMonitor(IntPtr foreground)
+    {
+        var area = DisplayArea.GetFromWindowId(
+            foreground != IntPtr.Zero && IsWindow(foreground)
+                ? Microsoft.UI.Win32Interop.GetWindowIdFromWindow(foreground)
+                : Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hwnd),
+            DisplayAreaFallback.Primary);
+        var workArea = area.WorkArea;
+        var config = App.MainViewModel.Config;
+        int widthPercent = Math.Clamp(config.LauncherWidthPercent, 40, 90);
+        int heightPercent = Math.Clamp(config.LauncherHeightPercent, 65, 95);
+        int width = Math.Min(workArea.Width - 32, Math.Max(480, (int)(workArea.Width * widthPercent / 100.0)));
+        int height = Math.Min(workArea.Height - 32, Math.Max(440, (int)(workArea.Height * heightPercent / 100.0)));
+        _appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
+        _appWindow.Move(new Windows.Graphics.PointInt32
+        {
+            X = workArea.X + (workArea.Width - width) / 2,
+            Y = workArea.Y + (workArea.Height - height) / 2
+        });
+    }
+
+    public void Toggle() => TogglePalette();
 
     public void TogglePalette()
     {
-        if (_isVisible)
-        {
-            HidePalette();
-            return;
-        }
+        if (_isVisible) { HidePalette(); return; }
+        Show();
+    }
+
+    public void Show()
+    {
+        if (_isVisible) { FocusSearchBox(); return; }
         _isVisible = true;
-        IntPtr foreground = GetForegroundWindow();
-        if (foreground != _hwnd)
-            _previousForeground = foreground;
         _launchInProgress = false;
-        _suppressSearchChange = true;
-        SearchBox.Text = string.Empty;
-        _suppressSearchChange = false;
-        FilterResults(string.Empty);
+        IntPtr foreground = GetForegroundWindow();
+        if (foreground != _hwnd) _previousForeground = foreground;
+        CenterOnMonitor(_previousForeground);
+        ApplyAppearance();
         _appWindow.Show();
         Activate();
         BringWindowToTop(_hwnd);
         SetForegroundWindow(_hwnd);
-        SearchBox.Focus(FocusState.Programmatic);
+        FocusSearchBox();
         DispatcherQueue.GetForCurrentThread()?.TryEnqueue(DispatcherQueuePriority.High, () =>
         {
             if (!_isVisible) return;
             BringWindowToTop(_hwnd);
             SetForegroundWindow(_hwnd);
-            SearchBox.Focus(FocusState.Programmatic);
+            FocusSearchBox();
         });
-        _resultsLoadTask ??= LoadResultsAsync();
+        _catalogLoadTask ??= LoadCatalogAsync(_catalogCancellation.Token);
+        if (_resultsLoaded) ApplySearch(SearchBox.Text);
+    }
+
+    public void Hide() => HidePalette();
+
+    public void HidePalette()
+    {
+        if (!_isVisible) return;
+        _isVisible = false;
+        _appWindow.Hide();
+        IntPtr restoreTarget = _previousForeground;
+        if (restoreTarget != IntPtr.Zero)
+        {
+            DispatcherQueue.GetForCurrentThread()?.TryEnqueue(DispatcherQueuePriority.High, () =>
+            {
+                if (IsWindow(restoreTarget)) SetForegroundWindow(restoreTarget);
+            });
+        }
+    }
+
+    private async Task LoadCatalogAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _catalog.InitializeAsync(cancellationToken);
+            _resultsLoaded = true;
+            ApplySearch(SearchBox.Text);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            App.LogStartup("Launcher app catalog refresh failed", ex);
+            _resultsLoaded = true;
+            ApplySearch(SearchBox.Text);
+        }
+    }
+
+    private void ApplySearch(string query)
+    {
+        if (!_resultsLoaded)
+        {
+            ApplicationsSection.Visibility = Visibility.Collapsed;
+            GroupsPanel.ItemsSource = null;
+            EmptyState.Visibility = Visibility.Visible;
+            EmptyStateText.Text = "Loading applications…";
+            EmptyStateIcon.Glyph = "\uE895";
+            ResultCountText.Text = string.Empty;
+            _visibleResults.Clear();
+            _selectedResultIndex = -1;
+            return;
+        }
+
+        var groups = _searchService.Search(query).ToList();
+        var appGroup = groups.FirstOrDefault(group => group.Id == "applications");
+        _allApplications = appGroup?.AllResults.ToList() ?? new List<LauncherResult>();
+        int columns = GetApplicationColumnCount();
+        const int previewRows = 2;
+        int previewCount = columns * previewRows;
+        _applicationStrip = (_showAllApplications ? _allApplications : _allApplications.Take(previewCount).ToList());
+        if (appGroup is not null) groups.Remove(appGroup);
+        foreach (var group in groups) group.SetExpanded(_expandedGroups.Contains(group.Id));
+
+        AppsGrid.ItemsSource = _applicationStrip;
+        AppsExpandButton.Visibility = _allApplications.Count > previewCount ? Visibility.Visible : Visibility.Collapsed;
+        AppsExpandLabel.Text = _showAllApplications ? "Show less  " : "Show all  ";
+        UpdateApplicationsGridLayout();
+        ApplicationsSection.Visibility = _applicationStrip.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AppsCountText.Text = appGroup is null ? string.Empty : $"{appGroup.AllResults.Count} apps";
+        _displayGroups = groups;
+        GroupsPanel.ItemsSource = _displayGroups;
+        UpdateVisibleResults();
+        EmptyState.Visibility = _visibleResults.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyStateText.Text = string.IsNullOrWhiteSpace(query) ? "No applications found" : "No matches found";
+        EmptyStateIcon.Glyph = "\uE721";
+
+        int totalCount = groups.Sum(group => group.AllResults.Count) + _allApplications.Count;
+        ResultCountText.Text = string.IsNullOrWhiteSpace(query) ? $"{totalCount} destinations" : $"{totalCount} matches";
+        _selectedResultIndex = _visibleResults.Count > 0 ? 0 : -1;
+        SelectResultAt(_selectedResultIndex);
+        ScheduleContentResize();
+    }
+
+    private void ScheduleContentResize()
+    {
+        if (_resizeTimer is null)
+        {
+            ResizeToContent();
+            return;
+        }
+
+        _resizeTimer.Stop();
+        _resizeTimer.Start();
+    }
+
+    private void ResizeToContent()
+    {
+        if (!_isVisible || LauncherContent.ActualHeight <= 0) return;
+
+        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hwnd);
+        var workArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary).WorkArea;
+        var config = App.MainViewModel.Config;
+        int maxHeight = Math.Min(workArea.Height - 32,
+            (int)(workArea.Height * Math.Clamp(config.LauncherHeightPercent, 65, 95) / 100.0));
+        double contentHeight = Math.Max(LauncherContent.ActualHeight,
+            EmptyState.Visibility == Visibility.Visible ? EmptyState.ActualHeight + 24 : 0);
+        double desiredDip = LauncherSurface.Padding.Top + LauncherSurface.Padding.Bottom
+            + LauncherSurface.BorderThickness.Top + LauncherSurface.BorderThickness.Bottom
+            + SearchHeader.ActualHeight + (LauncherRoot.RowSpacing * 2)
+            + contentHeight + LauncherFooter.ActualHeight;
+        double scale = LauncherRoot.XamlRoot?.RasterizationScale ?? 1.0;
+        int desiredHeight = (int)Math.Ceiling(desiredDip * scale);
+        int minHeight = Math.Min(360, maxHeight);
+        int height = Math.Clamp(desiredHeight, minHeight, maxHeight);
+        int width = _appWindow.Size.Width;
+        if (_appWindow.Size.Height == height) return;
+
+        _appWindow.Resize(new Windows.Graphics.SizeInt32 { Width = width, Height = height });
+        _appWindow.Move(new Windows.Graphics.PointInt32
+        {
+            X = workArea.X + (workArea.Width - width) / 2,
+            Y = workArea.Y + (workArea.Height - height) / 2
+        });
+    }
+
+    private int GetApplicationColumnCount()
+    {
+        return 6;
+    }
+
+    private void UpdateApplicationsGridLayout()
+    {
+        int columns = GetApplicationColumnCount();
+        int rows = Math.Max(1, (int)Math.Ceiling(_applicationStrip.Count / (double)columns));
+        const int rowHeight = 104;
+        // Set the height even before WinUI creates the items panel. Otherwise the
+        // XAML's one-row placeholder height clips the second row on first display.
+        AppsGrid.Height = Math.Max(120, rows * rowHeight + 16);
+        if (AppsGrid.ItemsPanelRoot is not ItemsWrapGrid wrapGrid || AppsGrid.ActualWidth <= 0) return;
+        wrapGrid.ItemWidth = AppsGrid.ActualWidth / columns;
+        wrapGrid.ItemHeight = rowHeight;
+    }
+
+    private void UpdateVisibleResults()
+    {
+        _visibleResults = _applicationStrip.Concat(_displayGroups.SelectMany(group => group.VisibleResults))
+            .Distinct().ToList();
+    }
+
+    private void SelectResultAt(int index)
+    {
+        foreach (var item in _visibleResults) item.IsSelected = false;
+        if (index < 0 || index >= _visibleResults.Count)
+        {
+            return;
+        }
+
+        _selectedResultIndex = index;
+        var selected = _visibleResults[index];
+        selected.IsSelected = true;
+        DispatcherQueue.TryEnqueue(() => ScrollSelectionIntoView(selected));
+    }
+
+    private void ScrollSelectionIntoView(LauncherResult selected)
+    {
+        if (_applicationStrip.Contains(selected))
+        {
+            AppsGrid.ScrollIntoView(selected);
+            if (AppsGrid.ContainerFromItem(selected) is UIElement appContainer)
+                appContainer.StartBringIntoView();
+            return;
+        }
+
+        foreach (var group in _displayGroups)
+        {
+            if (!group.VisibleResults.Contains(selected)) continue;
+            if (GroupsPanel.ContainerFromItem(group) is not DependencyObject groupContainer) return;
+
+            var resultsList = FindDescendant<ItemsControl>(groupContainer,
+                control => ReferenceEquals(control.ItemsSource, group.VisibleResults));
+            if (resultsList?.ContainerFromItem(selected) is UIElement resultContainer)
+                resultContainer.StartBringIntoView();
+            return;
+        }
+    }
+
+    private static T? FindDescendant<T>(DependencyObject parent, Func<T, bool> predicate)
+        where T : DependencyObject
+    {
+        int childCount = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < childCount; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match && predicate(match)) return match;
+            if (FindDescendant(child, predicate) is T descendant) return descendant;
+        }
+        return null;
     }
 
     private void FocusSearchBox()
     {
-        if (!_isVisible) return;
-        SearchBox.Focus(FocusState.Programmatic);
+        if (_isVisible) SearchBox.Focus(FocusState.Programmatic);
     }
 
-    public void HidePalette()
+    private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
     {
-        _isVisible = false;
-        _appWindow.Hide();
+        _searchBoxFocused = true;
+        UpdateSearchHeaderBorder();
     }
 
-    private async Task LoadResultsAsync()
+    private void SearchBox_LostFocus(object sender, RoutedEventArgs e)
     {
-        var results = await Task.Run(() =>
-        {
-            var indexed = new List<LauncherResult>();
-            var titles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        void Add(string title, string target, string category)
-        {
-            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(target)) return;
-            if (!titles.Add(title)) return;
-            indexed.Add(new LauncherResult(title, target, category));
-        }
-
-        void AddAction(string title, string subtitle, string action, string glyph)
-        {
-            if (titles.Add(title)) indexed.Add(new LauncherResult(title, subtitle, "Monolith", action, glyph));
-        }
-
-        AddAction("Open Monolith Settings", "Configure the window manager", "settings:General", "\uE713");
-        AddAction("Open Appearance Settings", "Change launcher material and animations", "settings:Appearance", "\uE790");
-        AddAction("Previous Workspace", "Switch to the previous Monolith workspace", "workspace:previous", "\uE72B");
-        AddAction("Next Workspace", "Switch to the next Monolith workspace", "workspace:next", "\uE72A");
-        AddAction("Toggle Floating", "Change how the focused window is managed", "window:float", "\uE8A7");
-        AddAction("Toggle Monocle", "Show the focused window by itself", "window:monocle", "\uE8A9");
-        AddAction("Tile Vertically", "Add or remove the focused window from a column", "window:vertical", "\uE8A9");
-        AddAction("Close Focused Window", "Close the window that was active before opening the launcher", "window:close", "\uE8BB");
-        AddAction("Minimize Focused Window", "Minimize the previously active window", "window:minimize", "\uE921");
-        AddAction("Maximize or Restore Focused Window", "Toggle the previous window between maximized and normal", "window:maximize", "\uE922");
-        AddAction("Restart Monolith Engine", "Restart window management", "engine:restart", "\uE777");
-        for (int workspace = 1; workspace <= 9; workspace++)
-        {
-            AddAction($"Switch to Workspace {workspace}", $"Show Monolith workspace {workspace}", $"workspace:{workspace}", "\uE8D4");
-            AddAction($"Move focused window to Workspace {workspace}", $"Send the current window to workspace {workspace}", $"move:{workspace}", "\uE8D4");
-        }
-
-        Add("Task Manager", "taskmgr.exe", "Windows tool");
-        Add("Windows Terminal", "wt.exe", "Windows tool");
-        Add("PowerShell", "powershell.exe", "Windows tool");
-        Add("Command Prompt", "cmd.exe", "Windows tool");
-        Add("File Explorer", "explorer.exe", "Windows tool");
-        Add("Windows Settings", "ms-settings:", "Windows tool");
-
-        var roots = new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs")
-        };
-        foreach (var root in roots)
-        {
-            try
-            {
-                if (!Directory.Exists(root)) continue;
-                foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
-                {
-                    var extension = Path.GetExtension(file);
-                    if (!extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".url", StringComparison.OrdinalIgnoreCase)) continue;
-                    var title = Path.GetFileNameWithoutExtension(file);
-                    if (title.StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase)) continue;
-                    Add(title, file, extension.Equals(".url", StringComparison.OrdinalIgnoreCase) ? "Web app" : "Application");
-                }
-            }
-            catch { }
-        }
-            return indexed;
-        });
-        _allResults.Clear();
-        _allResults.AddRange(results);
-        _resultsLoaded = true;
-        FilterResults(SearchBox.Text);
+        _searchBoxFocused = false;
+        UpdateSearchHeaderBorder();
     }
 
-    private void FilterResults(string query)
+    private void UpdateSearchHeaderBorder()
     {
-        if (!_resultsLoaded)
-        {
-            ResultsList.ItemsSource = null;
-            EmptyState.Visibility = Visibility.Visible;
-            EmptyStateText.Text = "Loading apps…";
-            EmptyStateIcon.Glyph = "\uE895";
-            ResultCountText.Text = string.Empty;
-            return;
-        }
-        IEnumerable<LauncherResult> results = _allResults;
-        bool commandsOnly = query.TrimStart().StartsWith('>');
-        string searchQuery = commandsOnly ? query.TrimStart()[1..].Trim() : query;
-        if (commandsOnly)
-            results = results.Where(item => item.Category == "Monolith");
-        else if (string.IsNullOrWhiteSpace(searchQuery))
-            results = results.Where(item => item.Category != "Monolith");
-        if (!string.IsNullOrWhiteSpace(searchQuery))
-        {
-            var terms = searchQuery.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            results = results.Select(item => (Item: item, Score: MatchScore(terms, $"{item.Title} {item.Subtitle} {item.Category}")))
-                .Where(match => match.Score >= 0)
-                .OrderByDescending(match => match.Score)
-                .Select(match => match.Item);
-        }
-        var visibleResults = results.Take(20).ToList();
-        ResultsList.ItemsSource = visibleResults;
-        EmptyState.Visibility = ResultsList.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyStateText.Text = "No matches";
-        EmptyStateIcon.Glyph = commandsOnly ? "\uE946" : "\uE721";
-        ResultCountText.Text = commandsOnly
-            ? $"{visibleResults.Count} Monolith actions"
-            : string.IsNullOrWhiteSpace(searchQuery)
-                ? $"{visibleResults.Count} apps and tools"
-                : $"{visibleResults.Count} matches";
-        if (ResultsList.Items.Count > 0) ResultsList.SelectedIndex = 0;
-        else
-        {
-            PreviewIcon.Source = null;
-            PreviewGlyph.Glyph = commandsOnly ? "\uE946" : "\uE721";
-            PreviewTitle.Text = commandsOnly ? "No actions found" : "No matches";
-            PreviewSubtitle.Text = commandsOnly
-                ? "Try another command or search term."
-                : "Try a different name or search term.";
-            PreviewCategoryPill.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void ActionsButton_Click(object sender, RoutedEventArgs e)
-    {
-        SearchBox.Text = ">";
-        SearchBox.Focus(FocusState.Programmatic);
-    }
-
-    private async void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ResultsList.SelectedItem is not LauncherResult result) return;
-
-        PreviewIcon.Source = null;
-        PreviewGlyph.Glyph = result.Glyph;
-        PreviewTitle.Text = result.Title;
-        PreviewSubtitle.Text = result.Subtitle;
-        PreviewCategory.Text = result.Category;
-        PreviewCategoryPill.Visibility = Visibility.Visible;
-
-        if (result.Category == "Monolith") return;
-        var iconPath = await result.LoadIconAsync();
-        if (iconPath is null || !ReferenceEquals(ResultsList.SelectedItem, result)) return;
-
-        var bitmap = new BitmapImage { DecodePixelWidth = 96, DecodePixelHeight = 96 };
-        bitmap.UriSource = new Uri(iconPath);
-        PreviewIcon.Source = bitmap;
+        var accent = AccentColorService.GetAccentColor();
+        var color = _searchBoxFocused
+            ? Windows.UI.Color.FromArgb(110, accent.R, accent.G, accent.B)
+            : _lightTheme
+                ? Windows.UI.Color.FromArgb(28, 0, 0, 0)
+                : Windows.UI.Color.FromArgb(36, 255, 255, 255);
+        SearchHeader.BorderBrush = new SolidColorBrush(color);
     }
 
     private async void ResultIcon_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not Image image || image.DataContext is not LauncherResult result) return;
-        if (result.Category == "Monolith") return;
+        if (sender is not Image image || image.DataContext is not LauncherResult result
+            || result.Category == "Windows settings") return;
         var iconPath = await result.LoadIconAsync();
-        if (iconPath is not null)
+        if (iconPath is null || !ReferenceEquals(image.DataContext, result)) return;
+        var bitmap = new BitmapImage { DecodePixelWidth = 64, DecodePixelHeight = 64 };
+        bitmap.UriSource = new Uri(iconPath);
+        image.Source = bitmap;
+        if (image.Parent is Grid iconGrid)
         {
-            // The launcher displays 32px icons; decode them at display size so
-            // shell icons (often 256px) do not occupy unnecessary bitmap memory.
-            var bitmap = new BitmapImage { DecodePixelWidth = 32, DecodePixelHeight = 32 };
-            bitmap.UriSource = new Uri(iconPath);
-            image.Source = bitmap;
+            foreach (var child in iconGrid.Children)
+                if (child is FontIcon fallbackIcon) fallbackIcon.Visibility = Visibility.Collapsed;
         }
     }
 
-    private static int MatchScore(string[] terms, string text)
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        int score = 0;
-        foreach (var term in terms)
-        {
-            int index = text.IndexOf(term, StringComparison.OrdinalIgnoreCase);
-            if (index < 0) return -1;
-            score += 100 - Math.Min(index, 99) + (index == 0 ? 100 : 0);
-        }
-        return score;
+        _showAllApplications = false;
+        if (_resultsLoaded) ApplySearch(SearchBox.Text);
     }
 
-    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    private void AppsExpandButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!_suppressSearchChange) FilterResults(sender.Text);
+        _showAllApplications = !_showAllApplications;
+        if (_resultsLoaded) ApplySearch(SearchBox.Text);
     }
 
-    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args) => LaunchSelected();
+    private void CloseLauncher_Click(object sender, RoutedEventArgs e) => HidePalette();
 
-    private void ResultsList_ItemClick(object sender, ItemClickEventArgs e)
+    private void AppsGrid_ItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is LauncherResult result) Launch(result);
+        if (e.ClickedItem is LauncherResult result) _ = LaunchAsync(result);
+    }
+
+    private void ResultButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: LauncherResult result }) _ = LaunchAsync(result);
+    }
+
+    private void GroupHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: LauncherResultGroup group }) return;
+        group.Toggle();
+        if (group.IsExpanded) _expandedGroups.Add(group.Id);
+        else _expandedGroups.Remove(group.Id);
+        int oldIndex = _selectedResultIndex;
+        UpdateVisibleResults();
+        SelectResultAt(Math.Clamp(oldIndex, 0, Math.Max(0, _visibleResults.Count - 1)));
     }
 
     private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -383,15 +525,45 @@ public sealed partial class LauncherWindow : Window
             LaunchSelected();
             e.Handled = true;
         }
-        else if (e.Key is Windows.System.VirtualKey.Down or Windows.System.VirtualKey.Up)
+        else if (e.Key is Windows.System.VirtualKey.Down or Windows.System.VirtualKey.Up
+                 or Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right)
         {
-            int count = ResultsList.Items.Count;
-            if (count > 0)
+            if (_visibleResults.Count > 0)
             {
-                int step = e.Key == Windows.System.VirtualKey.Down ? 1 : -1;
-                int current = ResultsList.SelectedIndex < 0 ? 0 : ResultsList.SelectedIndex;
-                ResultsList.SelectedIndex = (current + step + count) % count;
-                ResultsList.ScrollIntoView(ResultsList.SelectedItem);
+                int current = _selectedResultIndex < 0 ? 0 : _selectedResultIndex;
+                bool inApplicationGrid = current < _applicationStrip.Count;
+                int target = current;
+
+                if (inApplicationGrid)
+                {
+                    int columns = GetApplicationColumnCount();
+                    switch (e.Key)
+                    {
+                        case Windows.System.VirtualKey.Left when current % columns > 0:
+                            target = current - 1;
+                            break;
+                        case Windows.System.VirtualKey.Right when current % columns < columns - 1
+                            && current + 1 < _applicationStrip.Count:
+                            target = current + 1;
+                            break;
+                        case Windows.System.VirtualKey.Up when current >= columns:
+                            target = current - columns;
+                            break;
+                        case Windows.System.VirtualKey.Down when current + columns < _applicationStrip.Count:
+                            target = current + columns;
+                            break;
+                        case Windows.System.VirtualKey.Down when _applicationStrip.Count < _visibleResults.Count:
+                            target = _applicationStrip.Count;
+                            break;
+                    }
+                }
+                else if (e.Key is Windows.System.VirtualKey.Down or Windows.System.VirtualKey.Up)
+                {
+                    int step = e.Key == Windows.System.VirtualKey.Down ? 1 : -1;
+                    target = Math.Clamp(current + step, 0, _visibleResults.Count - 1);
+                }
+
+                SelectResultAt(target);
             }
             e.Handled = true;
         }
@@ -399,109 +571,27 @@ public sealed partial class LauncherWindow : Window
 
     private void LaunchSelected()
     {
-        if (!_launchInProgress && ResultsList.SelectedItem is LauncherResult result)
-        {
-            _launchInProgress = true;
-            Launch(result);
-        }
+        if (!_launchInProgress && _selectedResultIndex >= 0 && _selectedResultIndex < _visibleResults.Count)
+            _ = LaunchAsync(_visibleResults[_selectedResultIndex]);
     }
 
-    private async void Launch(LauncherResult result)
+    private async Task LaunchAsync(LauncherResult result)
     {
-        if (result.Category == "Monolith")
-        {
-            await ExecuteMonolithActionAsync(result);
-            return;
-        }
-
+        if (_launchInProgress) return;
+        _launchInProgress = true;
         HidePalette();
         try
         {
-            Process.Start(new ProcessStartInfo { FileName = result.Target, UseShellExecute = true });
+            if (result.ActivationTarget.Equals("monolith:settings", StringComparison.OrdinalIgnoreCase))
+                RequestOpenSettings?.Invoke("General");
+            else
+                await _activationService.LaunchAsync(result, _catalogCancellation.Token);
+            LauncherUsageStore.RecordLaunch(result);
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Could not open {result.Title}: {ex.Message}");
+            _launchInProgress = false;
+            App.LogStartup($"Could not launch {result.Title}", ex);
         }
     }
-
-    private async Task ExecuteMonolithActionAsync(LauncherResult result)
-    {
-        string action = result.Target;
-        HidePalette();
-        try
-        {
-            if (action.StartsWith("settings:", StringComparison.Ordinal))
-            {
-                RequestOpenSettings?.Invoke(action[9..]);
-                return;
-            }
-
-            if (action.StartsWith("workspace:", StringComparison.Ordinal))
-            {
-                string value = action[10..];
-                if (value == "next")
-                    await App.MainViewModel.NavigateWorkspaceAsync(1);
-                else if (value == "previous")
-                    await App.MainViewModel.NavigateWorkspaceAsync(-1);
-                else if (int.TryParse(value, out int workspace))
-                    await App.MainViewModel.SwitchWorkspaceAsync(workspace);
-                return;
-            }
-
-            if (action.StartsWith("move:", StringComparison.Ordinal) && int.TryParse(action[5..], out int targetWorkspace))
-            {
-                await App.MainViewModel.MoveActiveWindowToWorkspaceAsync(targetWorkspace, _previousForeground.ToInt64());
-                return;
-            }
-
-            if (action == "window:float") await App.MainViewModel.ToggleFloatingAsync(_previousForeground.ToInt64());
-            else if (action == "window:monocle") await App.MainViewModel.ToggleMonocleAsync(_previousForeground.ToInt64());
-            else if (action == "window:vertical") await App.MainViewModel.ToggleVerticalTileAsync(_previousForeground.ToInt64());
-            else if (action == "window:close" && _previousForeground != IntPtr.Zero)
-                PostWindowMessage(_previousForeground, 0x0010, UIntPtr.Zero, IntPtr.Zero);
-            else if (action == "window:minimize" && _previousForeground != IntPtr.Zero)
-                ShowWindow(_previousForeground, 6);
-            else if (action == "window:maximize" && _previousForeground != IntPtr.Zero)
-                ShowWindow(_previousForeground, IsZoomed(_previousForeground) ? 9 : 3);
-            else if (action == "engine:restart") await App.MainViewModel.RestartEngineAsync();
-        }
-        catch (Exception ex)
-        {
-            App.LogStartup($"Launcher action failed: {result.Title}", ex);
-        }
-    }
-}
-
-public sealed class LauncherResult
-{
-    public LauncherResult(string title, string target, string category, string? glyph = null)
-        : this(title, target, category, target, glyph)
-    {
-    }
-
-    public LauncherResult(string title, string subtitle, string category, string target, string? glyph)
-    {
-        Title = title;
-        Subtitle = subtitle;
-        Target = target;
-        Category = category;
-        _glyph = glyph;
-    }
-
-    public string Title { get; }
-    public string Target { get; }
-    public string Category { get; }
-    public string Subtitle { get; }
-    private readonly string? _glyph;
-    private Task<string?>? _iconLoadTask;
-    public async Task<string?> LoadIconAsync() =>
-        await (_iconLoadTask ??= Task.Run(() => ShellIconCache.GetIconPath(Target)));
-
-    public string Glyph => _glyph ?? (Category switch
-    {
-        "Windows tool" => "\uE713",
-        "Web app" => "\uE774",
-        _ => "\uECAA"
-    });
 }

@@ -14,6 +14,14 @@ internal sealed class TaskViewMonobarModule : MonobarModuleBase
     private static void SendWindowsShortcut(ushort key) => NativeShortcut.Send(key);
 }
 
+internal sealed class QuickSettingsMonobarModule : MonobarModuleBase
+{
+    public QuickSettingsMonobarModule(MainWindow owner) : base(owner) =>
+        Element = IconButton("\uE713", "Open Windows Quick Settings", (_, _) => NativeShortcut.Send(0x41));
+    public override string Id => "quick-settings";
+    public override UIElement Element { get; }
+}
+
 internal sealed class ShowDesktopMonobarModule : MonobarModuleBase
 {
     public ShowDesktopMonobarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE80F", "Show desktop", (_, _) => NativeShortcut.Send(0x44));

@@ -8,6 +8,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Monolith.Studio.Services;
 using Windows.Graphics;
 
 namespace Monolith.Studio;
@@ -58,6 +59,12 @@ public sealed partial class MonobarWindow : Window
     private readonly IntPtr _hwnd;
     internal static IntPtr BarHandle { get; private set; }
     private bool _registeredAsAppBar;
+    private bool? _barVisible;
+    private int _appliedHeight = -1;
+    private int _appliedOpacity = -1;
+    private string? _appliedMaterial;
+    private string? _appliedModuleConfiguration;
+    private AcrylicWindowBackdrop? _acrylicBackdrop;
 
     public MonobarWindow()
     {
@@ -83,6 +90,8 @@ public sealed partial class MonobarWindow : Window
         Closed += (_, _) =>
         {
             _refreshTimer.Stop();
+            _acrylicBackdrop?.Dispose();
+            _acrylicBackdrop = null;
             foreach (var module in _modules)
             {
                 try { module.Dispose(); }
@@ -104,70 +113,102 @@ public sealed partial class MonobarWindow : Window
         var config = App.MainViewModel.Config;
         var work = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
         int height = Math.Clamp(config.MonobarHeight, 28, 64);
-        BarSurface.Opacity = 1;
-        if (config.MonobarMaterial == "Pure OLED Dark")
+        bool materialChanged = !string.Equals(_appliedMaterial, config.MonobarMaterial, StringComparison.Ordinal);
+        bool opacityChanged = _appliedOpacity != config.MonobarOpacity;
+        bool heightChanged = _appliedHeight != height;
+        if (materialChanged) ApplyBackdrop(config.MonobarMaterial, config.MonobarOpacity);
+        byte tintAlpha = (byte)Math.Clamp(10 + config.MonobarOpacity * 0.55, 20, 70);
+        if (materialChanged || opacityChanged)
+        {
+            BarSurface.Background = config.MonobarMaterial switch
+            {
+                "Acrylic (Frosted Glass)" => new SolidColorBrush(Windows.UI.Color.FromArgb(0, 22, 22, 22)),
+                "Pure OLED Dark" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0)),
+                "Mica" or "Mica Alt" => new SolidColorBrush(Windows.UI.Color.FromArgb(38, 18, 18, 18)),
+                _ => new SolidColorBrush(Windows.UI.Color.FromArgb(tintAlpha, 22, 22, 22))
+            };
+            if (config.MonobarMaterial == "Acrylic (Frosted Glass)")
+                _acrylicBackdrop?.SetTintOpacity(config.MonobarOpacity / 250d);
+            _appliedMaterial = config.MonobarMaterial;
+            _appliedOpacity = config.MonobarOpacity;
+        }
+
+        string moduleConfiguration = string.Join("|", (config.MonobarModules ?? Models.MonobarModuleConfig.CreateDefaults())
+            .Where(item => item.Enabled)
+            .OrderBy(item => item.Order)
+            .Select(item => $"{item.Id}:{item.Order}:{item.Alignment}:{item.WallpaperFolder}:{item.ClockUse24Hour}:{item.VisibilityCondition}"));
+        if (!string.Equals(_appliedModuleConfiguration, moduleConfiguration, StringComparison.Ordinal))
+        {
+            foreach (var module in _modules)
+            {
+                try { module.Dispose(); }
+                catch (Exception ex) { App.LogStartup($"Failed to close Monobar module '{module.Id}'", ex); }
+            }
+            _modules.Clear();
+            LeftModules.Children.Clear();
+            CenterModules.Children.Clear();
+            RightModules.Children.Clear();
+            foreach (var item in (config.MonobarModules ?? Models.MonobarModuleConfig.CreateDefaults()).Where(item => item.Enabled).OrderBy(item => item.Order))
+            {
+                try
+                {
+                    var module = MonobarModuleFactory.Create(item, App.MainWindowInstance!);
+                    if (module is null) continue;
+                    _modules.Add(module);
+                    var host = item.Alignment switch
+                    {
+                        "Center" => CenterModules,
+                        "Right" => RightModules,
+                        _ => LeftModules
+                    };
+                    host.Children.Add(module.Element);
+                }
+                catch (Exception ex)
+                {
+                    App.LogStartup($"Failed to create Monobar module '{item.Id}'", ex);
+                }
+            }
+            _appliedModuleConfiguration = moduleConfiguration;
+            RefreshModules();
+        }
+
+        bool shouldShow = config.MonolithEnabled && config.MonobarEnabled;
+        if (shouldShow && (_barVisible != true || heightChanged)) ShowBar();
+        else if (!shouldShow && _barVisible != false) HideBar();
+        _appliedHeight = height;
+    }
+
+    private void ApplyBackdrop(string material, int opacity)
+    {
+        _acrylicBackdrop?.Dispose();
+        _acrylicBackdrop = null;
+        if (material == "Acrylic (Frosted Glass)")
         {
             SystemBackdrop = null;
-        }
-        else if (config.MonobarMaterial == "Mica")
-        {
-            SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
-        }
-        else if (config.MonobarMaterial == "Mica Alt")
-        {
-            SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+            _acrylicBackdrop = AcrylicWindowBackdrop.Attach(this, opacity / 250d);
         }
         else
         {
-            // Let WinUI own the acrylic surface. The legacy accent policy
-            // leaves WinUI's swap chain with a black backing on these windows.
-            SystemBackdrop = new DesktopAcrylicBackdrop();
+            if (material == "Pure OLED Dark") SystemBackdrop = null;
+            else if (material == "Mica") SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+            else if (material == "Mica Alt") SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+            else SystemBackdrop = new DesktopAcrylicBackdrop();
         }
-        byte tintAlpha = (byte)Math.Clamp(10 + config.MonobarOpacity * 0.55, 20, 70);
-        BarSurface.Background = config.MonobarMaterial switch
-        {
-            "Pure OLED Dark" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0)),
-            "Mica" or "Mica Alt" => new SolidColorBrush(Windows.UI.Color.FromArgb(38, 18, 18, 18)),
-            _ => new SolidColorBrush(Windows.UI.Color.FromArgb(tintAlpha, 22, 22, 22))
-        };
-        MoveToTop(work, height);
-
-        foreach (var module in _modules)
-            module.Dispose();
-        _modules.Clear();
-        LeftModules.Children.Clear();
-        CenterModules.Children.Clear();
-        RightModules.Children.Clear();
-        foreach (var item in (config.MonobarModules ?? Models.MonobarModuleConfig.CreateDefaults()).Where(item => item.Enabled).OrderBy(item => item.Order))
-        {
-            try
-            {
-                var module = MonobarModuleFactory.Create(item.Id, App.MainWindowInstance!);
-                if (module is null) continue;
-                _modules.Add(module);
-                var host = item.Alignment switch
-                {
-                    "Center" => CenterModules,
-                    "Right" => RightModules,
-                    _ => LeftModules
-                };
-                host.Children.Add(module.Element);
-            }
-            catch (Exception ex)
-            {
-                App.LogStartup($"Failed to create Monobar module '{item.Id}'", ex);
-            }
-        }
-
-        RefreshModules();
-        if (config.MonolithEnabled && config.MonobarEnabled) ShowBar(); else HideBar();
     }
 
     public void RefreshModules()
     {
+        MonobarConditionService.RefreshMediaState();
         foreach (var module in _modules)
         {
-            try { module.Refresh(); }
+            try
+            {
+                module.Refresh();
+                var config = App.MainViewModel.Config.MonobarModules?.FirstOrDefault(item => string.Equals(item.Id, module.Id, StringComparison.OrdinalIgnoreCase));
+                string condition = config?.VisibilityCondition ?? "always";
+                bool visible = MonobarConditionService.Evaluate(condition);
+                module.Element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            }
             catch (Exception ex) { App.LogStartup($"Failed to refresh Monobar module '{module.Id}'", ex); }
         }
     }
@@ -179,11 +220,14 @@ public sealed partial class MonobarWindow : Window
         int height = Math.Clamp(App.MainViewModel.Config.MonobarHeight, 28, 64);
         MoveToTop(bounds, height);
         SetWindowPos(_hwnd, HwndTopmost, bounds.X, bounds.Y, bounds.Width, height, SwpNoActivate | SwpFrameChanged | SwpShowWindow);
+        _barVisible = true;
+        _appliedHeight = height;
     }
 
     public void HideBar()
     {
         AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(_hwnd)).Hide();
+        _barVisible = false;
         if (_registeredAsAppBar)
         {
             var data = CreateAppBarData();

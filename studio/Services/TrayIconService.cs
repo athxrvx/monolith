@@ -39,12 +39,13 @@ public sealed class TrayIconService : IDisposable
     private readonly Action<bool> _setTilerEnabled;
     private readonly Func<bool> _isLauncherEnabled;
     private readonly Action<bool> _setLauncherEnabled;
-    private readonly Func<bool> _isEdgeNavigationEnabled;
-    private readonly Action<bool> _setEdgeNavigationEnabled;
     private readonly Action _restartTiler;
     private readonly Action _exitApp;
-    private readonly IntPtr _window;
-    private readonly IntPtr _icon;
+    private IntPtr _window;
+    private IntPtr _icon;
+    private IntPtr _instance;
+    private bool _classRegistered;
+    private bool _iconAdded;
     private bool _disposed;
 
     public TrayIconService(
@@ -56,8 +57,6 @@ public sealed class TrayIconService : IDisposable
         Action<bool> setTilerEnabled,
         Func<bool> isLauncherEnabled,
         Action<bool> setLauncherEnabled,
-        Func<bool> isEdgeNavigationEnabled,
-        Action<bool> setEdgeNavigationEnabled,
         Action restartTiler,
         Action exitApp)
     {
@@ -69,46 +68,53 @@ public sealed class TrayIconService : IDisposable
         _setTilerEnabled = setTilerEnabled;
         _isLauncherEnabled = isLauncherEnabled;
         _setLauncherEnabled = setLauncherEnabled;
-        _isEdgeNavigationEnabled = isEdgeNavigationEnabled;
-        _setEdgeNavigationEnabled = setEdgeNavigationEnabled;
         _restartTiler = restartTiler;
         _exitApp = exitApp;
-        _activeService = this;
-
-        IntPtr instance = GetModuleHandle(null);
-        var windowClass = new WindowClass
+        try
         {
-            Size = (uint)Marshal.SizeOf<WindowClass>(),
-            Instance = instance,
-            WindowProcedure = Marshal.GetFunctionPointerForDelegate(WindowProcedure),
-            ClassName = WindowClassName
-        };
-        if (RegisterClassEx(ref windowClass) == 0)
-            throw new InvalidOperationException("Could not register the Monolith tray window.");
+            _instance = GetModuleHandle(null);
+            var windowClass = new WindowClass
+            {
+                Size = (uint)Marshal.SizeOf<WindowClass>(),
+                Instance = _instance,
+                WindowProcedure = Marshal.GetFunctionPointerForDelegate(WindowProcedure),
+                ClassName = WindowClassName
+            };
+            if (RegisterClassEx(ref windowClass) == 0)
+                throw new InvalidOperationException("Could not register the Monolith tray window.");
+            _classRegistered = true;
 
-        _window = CreateWindowEx(WsExToolWindow, WindowClassName, "Monolith Tray", WsPopup,
-            0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, instance, IntPtr.Zero);
-        if (_window == IntPtr.Zero)
-            throw new InvalidOperationException("Could not create the Monolith tray window.");
+            _window = CreateWindowEx(WsExToolWindow, WindowClassName, "Monolith Tray", WsPopup,
+                0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, _instance, IntPtr.Zero);
+            if (_window == IntPtr.Zero)
+                throw new InvalidOperationException("Could not create the Monolith tray window.");
 
-        string iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "monolith_icon.ico");
-        _icon = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 0, 0, LrLoadFromFile | LrDefaultSize);
-        if (_icon == IntPtr.Zero)
-            throw new InvalidOperationException($"Could not load the Monolith tray icon from '{iconPath}'.");
-        var data = new NotifyIconData
+            string iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "monolith_icon.ico");
+            _icon = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 0, 0, LrLoadFromFile | LrDefaultSize);
+            if (_icon == IntPtr.Zero)
+                throw new InvalidOperationException($"Could not load the Monolith tray icon from '{iconPath}'.");
+            var data = new NotifyIconData
+            {
+                Size = (uint)Marshal.SizeOf<NotifyIconData>(),
+                Window = _window,
+                Id = 1,
+                Flags = NifMessage | NifIcon | NifTip,
+                CallbackMessage = CallbackMessage,
+                Icon = _icon,
+                Tip = "Monolith Desktop Environment",
+                Info = string.Empty,
+                InfoTitle = string.Empty
+            };
+            if (!ShellNotifyIcon(NimAdd, ref data))
+                throw new InvalidOperationException("Windows could not add the Monolith notification icon.");
+            _iconAdded = true;
+            _activeService = this;
+        }
+        catch
         {
-            Size = (uint)Marshal.SizeOf<NotifyIconData>(),
-            Window = _window,
-            Id = 1,
-            Flags = NifMessage | NifIcon | NifTip,
-            CallbackMessage = CallbackMessage,
-            Icon = _icon,
-            Tip = "Monolith Desktop Environment",
-            Info = string.Empty,
-            InfoTitle = string.Empty
-        };
-        if (!ShellNotifyIcon(NimAdd, ref data))
-            throw new InvalidOperationException("Windows could not add the Monolith notification icon.");
+            ReleaseNativeResources();
+            throw;
+        }
     }
 
     private static IntPtr WindowProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
@@ -149,7 +155,6 @@ public sealed class TrayIconService : IDisposable
                 case 4 when _isMonolithEnabled(): _setLauncherEnabled(!_isLauncherEnabled()); break;
                 case 5 when _isMonolithEnabled(): _restartTiler(); break;
                 case 6: _exitApp(); break;
-                case 7 when _isMonolithEnabled(): _setEdgeNavigationEnabled(!_isEdgeNavigationEnabled()); break;
             }
         });
     }
@@ -170,7 +175,6 @@ public sealed class TrayIconService : IDisposable
             uint disabled = _isMonolithEnabled() ? 0 : MfGrayed;
             AppendMenu(menu, MfString | disabled | (_isTilerEnabled() ? MfChecked : 0), 3, "Tiler enabled");
             AppendMenu(menu, MfString | disabled | (_isLauncherEnabled() ? MfChecked : 0), 4, "Launcher enabled");
-            AppendMenu(menu, MfString | disabled | (_isEdgeNavigationEnabled() ? MfChecked : 0), 7, "Edge navigation enabled");
             AppendMenu(menu, MfSeparator, 0, null);
             AppendMenu(menu, MfString | disabled, 5, "Restart Tiler");
             AppendMenu(menu, MfSeparator, 0, null);
@@ -193,24 +197,42 @@ public sealed class TrayIconService : IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        if (_window != IntPtr.Zero)
-        {
-            var data = new NotifyIconData
-            {
-                Size = (uint)Marshal.SizeOf<NotifyIconData>(),
-                Window = _window,
-                Id = 1,
-                Tip = string.Empty,
-                Info = string.Empty,
-                InfoTitle = string.Empty
-            };
-            ShellNotifyIcon(NimDelete, ref data);
-            DestroyWindow(_window);
-        }
-        if (_icon != IntPtr.Zero)
-            DestroyIcon(_icon);
+        ReleaseNativeResources();
         if (ReferenceEquals(_activeService, this))
             _activeService = null;
+    }
+
+    private void ReleaseNativeResources()
+    {
+        if (_window != IntPtr.Zero)
+        {
+            if (_iconAdded)
+            {
+                var data = new NotifyIconData
+                {
+                    Size = (uint)Marshal.SizeOf<NotifyIconData>(),
+                    Window = _window,
+                    Id = 1,
+                    Tip = string.Empty,
+                    Info = string.Empty,
+                    InfoTitle = string.Empty
+                };
+                ShellNotifyIcon(NimDelete, ref data);
+                _iconAdded = false;
+            }
+            DestroyWindow(_window);
+            _window = IntPtr.Zero;
+        }
+        if (_icon != IntPtr.Zero)
+        {
+            DestroyIcon(_icon);
+            _icon = IntPtr.Zero;
+        }
+        if (_classRegistered)
+        {
+            UnregisterClass(WindowClassName, _instance);
+            _classRegistered = false;
+        }
     }
 
     private delegate IntPtr WndProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
@@ -257,6 +279,7 @@ public sealed class TrayIconService : IDisposable
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr GetModuleHandle(string? moduleName);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern ushort RegisterClassEx(ref WindowClass windowClass);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool UnregisterClass(string className, IntPtr instance);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr CreateWindowEx(uint exStyle, string className, string windowName, uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr parameter);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr DefWindowProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);

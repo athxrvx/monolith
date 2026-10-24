@@ -35,10 +35,10 @@
                                         Tag="{x:Bind}"
                                         Click="BindingButton_Click"
                                         Background="#292929"
-                                        BorderBrush="#4D00E5FF"
+                                        BorderBrush="#555555"
                                         BorderThickness="1"
                                         CornerRadius="6"
-                                        Foreground="#60CDFF"
+                                        Foreground="#D8D8D8"
                                         FontFamily="Consolas, Segoe UI"
                                         FontWeight="SemiBold"
                                         Padding="10,4" />

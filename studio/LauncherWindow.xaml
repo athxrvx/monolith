@@ -3,164 +3,233 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Monolith.Studio"
-    Title="Launcher">
+    Title="Monolith Search">
     <Border x:Name="LauncherSurface"
             Background="#E61C1C1C"
-            BorderBrush="#26FFFFFF"
+            BorderBrush="#30FFFFFF"
             BorderThickness="1"
-            CornerRadius="8"
-            Padding="12">
+            CornerRadius="10"
+            Padding="14">
         <Border.Resources>
-            <SolidColorBrush x:Key="LauncherSecondaryTextBrush" Color="#C8C8C8" />
-            <SolidColorBrush x:Key="LauncherTertiaryTextBrush" Color="#999999" />
+            <SolidColorBrush x:Key="SurfaceHigherBrush" Color="#383838" />
+            <SolidColorBrush x:Key="GroupSurfaceBrush" Color="#12FFFFFF" />
+            <SolidColorBrush x:Key="GroupSurfaceBorderBrush" Color="#18FFFFFF" />
+            <SolidColorBrush x:Key="LauncherSecondaryTextBrush" Color="#D4D4D4" />
+            <SolidColorBrush x:Key="LauncherTertiaryTextBrush" Color="#A8A8A8" />
         </Border.Resources>
-        <Grid RowSpacing="10" KeyDown="Root_KeyDown">
+        <Grid x:Name="LauncherRoot" RowSpacing="10" KeyDown="Root_KeyDown">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" ColumnSpacing="12" Padding="2,0,2,3">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <AutoSuggestBox x:Name="SearchBox"
-                                Grid.Column="0"
-                                MinHeight="42"
-                                FontSize="17"
-                                Padding="0"
-                                PlaceholderText="Search apps and commands"
-                                TextChanged="SearchBox_TextChanged"
-                                QuerySubmitted="SearchBox_QuerySubmitted"
-                                KeyDown="Root_KeyDown">
-                    <AutoSuggestBox.QueryIcon>
-                        <SymbolIcon Symbol="Find" />
-                    </AutoSuggestBox.QueryIcon>
-                </AutoSuggestBox>
-            </Grid>
+            <Border x:Name="SearchHeader" Grid.Row="0" Margin="2,0,8,0"
+                    Background="#26262626" BorderBrush="#30FFFFFF"
+                    BorderThickness="1" CornerRadius="9" Padding="14,0">
+                <Border.Resources>
+                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                    <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                </Border.Resources>
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Glyph="&#xE721;" FontSize="18" Foreground="{StaticResource AccentBlueBrush}"
+                              VerticalAlignment="Center" />
+                    <TextBox x:Name="SearchBox" Grid.Column="1" Height="32" MinHeight="32" FontSize="14"
+                             VerticalAlignment="Center" VerticalContentAlignment="Center"
+                             TextWrapping="Wrap" AcceptsReturn="False"
+                             Padding="0,4,0,0" BorderThickness="0" BorderBrush="Transparent"
+                             FocusVisualPrimaryBrush="Transparent" FocusVisualSecondaryBrush="Transparent"
+                             Background="Transparent"
+                             PlaceholderText="Search applications and settings"
+                             TextChanged="SearchBox_TextChanged" KeyDown="Root_KeyDown"
+                             GotFocus="SearchBox_GotFocus" LostFocus="SearchBox_LostFocus"
+                             AutomationProperties.Name="Search applications and settings" />
+                    <Button Grid.Column="2" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets"
+                            Background="Transparent" BorderThickness="0" Click="CloseLauncher_Click"
+                            AutomationProperties.Name="Close launcher" />
+                </Grid>
+            </Border>
 
-            <Grid Grid.Row="1" ColumnSpacing="10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.72*" />
-                    <ColumnDefinition Width="1*" />
-                </Grid.ColumnDefinitions>
-                <Border Background="{StaticResource SurfaceElevatedBrush}"
-                        BorderBrush="#24FFFFFF" BorderThickness="1"
-                        CornerRadius="8" Padding="6,5,3,5">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <Grid Padding="8,3,8,7">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Results" FontSize="12" FontWeight="SemiBold"
-                                       Foreground="{StaticResource LauncherTertiaryTextBrush}" />
-                            <Button Grid.Column="1" Content="Commands" Padding="8,2" MinHeight="28"
-                                    FontSize="12"
-                                    Click="ActionsButton_Click" />
-                        </Grid>
-                        <ListView x:Name="ResultsList" Grid.Row="1"
-                          IsItemClickEnabled="True"
-                          ItemClick="ResultsList_ItemClick"
-                          SelectionChanged="ResultsList_SelectionChanged"
-                          SelectionMode="Single"
-                          Background="Transparent"
-                          BorderThickness="0"
-                          Padding="0"
-                          ScrollViewer.HorizontalScrollMode="Disabled"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                          ScrollViewer.VerticalScrollMode="Auto"
-                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                          KeyDown="Root_KeyDown">
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="local:LauncherResult">
-                            <Grid ColumnSpacing="10" Padding="2,0">
+            <Grid Grid.Row="1">
+                <ScrollViewer x:Name="ContentScrollViewer" VerticalScrollMode="Auto"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="LauncherContent" Spacing="16" Padding="2,2,8,12">
+                        <Border x:Name="ApplicationsSection" CornerRadius="10" Padding="10"
+                                Background="{StaticResource GroupSurfaceBrush}"
+                                BorderBrush="{StaticResource GroupSurfaceBorderBrush}" BorderThickness="1">
+                        <StackPanel Spacing="6">
+                            <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="34" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Border Width="30" Height="30" CornerRadius="6"
-                                        Background="{StaticResource SurfaceHigherBrush}"
-                                        VerticalAlignment="Center">
-                                    <Grid>
-                                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="15" Foreground="{StaticResource AccentBlueBrush}"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        <Image Stretch="Uniform" Loaded="ResultIcon_Loaded" Margin="3" />
-                                    </Grid>
-                                </Border>
-                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                    <TextBlock Text="{x:Bind Title}" FontSize="12" FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{x:Bind Subtitle}" FontSize="10"
-                                               Foreground="{StaticResource LauncherTertiaryTextBrush}"
-                                               TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                <TextBlock x:Name="AppsHeading" Text="Applications" FontSize="16"
+                                           FontWeight="SemiBold" Margin="4,0,0,0" />
+                                <TextBlock x:Name="AppsCountText" Grid.Column="1" FontSize="11"
+                                           Foreground="{StaticResource LauncherTertiaryTextBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Button x:Name="AppsExpandButton" Grid.Column="2" Padding="8,5"
+                                        Click="AppsExpandButton_Click" Background="Transparent"
+                                        BorderThickness="0" Visibility="Collapsed">
+                                    <TextBlock x:Name="AppsExpandLabel" Text="Show all"
+                                               Foreground="{StaticResource AccentBlueBrush}" FontSize="12" />
+                                </Button>
                             </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-                    </Grid>
-                </Border>
-
-                <Border Grid.Column="1" Background="{StaticResource SurfaceElevatedBrush}"
-                        BorderBrush="#24FFFFFF" BorderThickness="1"
-                        CornerRadius="8" Padding="14">
-                    <Grid x:Name="PreviewPanel">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Preview" FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{StaticResource LauncherSecondaryTextBrush}" />
-                        <StackPanel Grid.Row="1" Spacing="10" VerticalAlignment="Center">
-                            <Border Width="72" Height="72" CornerRadius="8"
-                                    Background="{StaticResource SurfaceHigherBrush}"
-                                    HorizontalAlignment="Center">
-                                <Grid>
-                                    <FontIcon x:Name="PreviewGlyph" Glyph="&#xE721;" FontSize="34"
-                                              Foreground="{StaticResource AccentBlueBrush}"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    <Image x:Name="PreviewIcon" Stretch="Uniform" Margin="12" />
-                                </Grid>
-                            </Border>
-                            <TextBlock x:Name="PreviewTitle" Text="Find something" FontSize="16" FontWeight="SemiBold"
-                                       TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxLines="2" />
-                            <TextBlock x:Name="PreviewSubtitle" Text="Your apps and commands appear here"
-                                       FontSize="11" TextAlignment="Center" TextWrapping="WrapWholeWords"
-                                       Foreground="{StaticResource LauncherSecondaryTextBrush}" MaxLines="3" />
+                            <GridView x:Name="AppsGrid" Height="120" IsItemClickEnabled="True"
+                                      ItemClick="AppsGrid_ItemClick" SelectionMode="None"
+                                      Background="Transparent" BorderThickness="0" Padding="0"
+                                      ScrollViewer.HorizontalScrollMode="Disabled"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                      ScrollViewer.VerticalScrollMode="Disabled"
+                                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                      KeyDown="Root_KeyDown">
+                                <GridView.ItemContainerStyle>
+                                    <Style TargetType="GridViewItem">
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="Margin" Value="2" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                        <Setter Property="CornerRadius" Value="8" />
+                                    </Style>
+                                </GridView.ItemContainerStyle>
+                                <GridView.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid Orientation="Horizontal"
+                                                        ItemWidth="100" ItemHeight="104" />
+                                    </ItemsPanelTemplate>
+                                </GridView.ItemsPanel>
+                                <GridView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:LauncherResult">
+                                        <Border HorizontalAlignment="Stretch" Height="96" CornerRadius="8" Padding="4"
+                                                Background="{x:Bind SelectionBackgroundBrush, Mode=OneWay}"
+                                                BorderBrush="{x:Bind SelectionBorderBrush, Mode=OneWay}"
+                                                BorderThickness="1">
+                                            <StackPanel Spacing="4" VerticalAlignment="Center">
+                                                <Border Width="40" Height="40" CornerRadius="11"
+                                                        Background="{StaticResource SurfaceHigherBrush}"
+                                                        HorizontalAlignment="Center">
+                                                    <Grid>
+                                                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="27"
+                                                                  Foreground="{StaticResource LauncherSecondaryTextBrush}"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        <Image Stretch="Uniform" Loaded="ResultIcon_Loaded" Margin="5" />
+                                                    </Grid>
+                                                </Border>
+                                                <TextBlock Text="{x:Bind Title}" FontSize="11" FontWeight="SemiBold"
+                                                           TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="Wrap" MaxLines="2" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </GridView.ItemTemplate>
+                            </GridView>
                         </StackPanel>
-                        <Border x:Name="PreviewCategoryPill" Grid.Row="2"
-                                Background="{StaticResource SurfaceHigherBrush}" CornerRadius="4"
-                                Padding="8,4" HorizontalAlignment="Center" Visibility="Collapsed">
-                            <TextBlock x:Name="PreviewCategory" FontSize="10"
-                                       Foreground="{StaticResource LauncherSecondaryTextBrush}" />
                         </Border>
-                    </Grid>
-                </Border>
 
-                <StackPanel x:Name="EmptyState" Visibility="Collapsed" Spacing="6"
+                        <ItemsControl x:Name="GroupsPanel">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:LauncherResultGroup">
+                                    <Border CornerRadius="10" Padding="10" Margin="0,0,0,16"
+                                            Background="{StaticResource GroupSurfaceBrush}"
+                                            BorderBrush="{StaticResource GroupSurfaceBorderBrush}" BorderThickness="1">
+                                    <StackPanel Spacing="5">
+                                        <Button Tag="{x:Bind}" Click="GroupHeader_Click" Padding="10,7"
+                                                IsEnabled="{x:Bind CanExpand}"
+                                                HorizontalContentAlignment="Stretch" Background="Transparent"
+                                                BorderThickness="0">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{x:Bind Title}" FontSize="15" FontWeight="SemiBold" />
+                                                <TextBlock Grid.Column="1" Text="{x:Bind CountLabel}"
+                                                           FontSize="11" Foreground="{StaticResource LauncherTertiaryTextBrush}"
+                                                           VerticalAlignment="Center" Margin="0,0,10,0" />
+                                                <TextBlock Grid.Column="2" Text="{x:Bind ExpandLabel, Mode=OneWay}"
+                                                           Visibility="{x:Bind ExpandVisibility}"
+                                                           FontSize="11" Foreground="{StaticResource LauncherSecondaryTextBrush}"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Button>
+                                        <ItemsControl ItemsSource="{x:Bind VisibleResults}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="local:LauncherResult">
+                                                    <Button Tag="{x:Bind}" Click="ResultButton_Click" Padding="0"
+                                                            Margin="2,1" HorizontalContentAlignment="Stretch"
+                                                            Background="Transparent" BorderThickness="0" CornerRadius="8">
+                                                        <Border CornerRadius="8" Padding="10,6"
+                                                                BorderThickness="1"
+                                                                BorderBrush="{x:Bind SelectionBorderBrush, Mode=OneWay}"
+                                                                Background="{x:Bind SelectionBackgroundBrush, Mode=OneWay}">
+                                                            <Grid ColumnSpacing="12" MinHeight="48">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="42" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Width="36" Height="36" CornerRadius="9"
+                                                                        Background="{StaticResource SurfaceHigherBrush}"
+                                                                        VerticalAlignment="Center">
+                                                                    <Grid>
+                                                                        <FontIcon Glyph="{x:Bind Glyph}" FontSize="18"
+                                                                                  Foreground="{StaticResource LauncherSecondaryTextBrush}"
+                                                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                        <Image Stretch="Uniform" Loaded="ResultIcon_Loaded" Margin="4" />
+                                                                    </Grid>
+                                                                </Border>
+                                                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{x:Bind Title}" FontSize="13" FontWeight="SemiBold"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Text="{x:Bind Description}" Visibility="{x:Bind DescriptionVisibility}"
+                                                                               FontSize="11" Foreground="{StaticResource LauncherTertiaryTextBrush}"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+                <StackPanel x:Name="EmptyState" Visibility="Collapsed" Spacing="10"
                             VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <FontIcon x:Name="EmptyStateIcon" Glyph="&#xE721;" FontSize="20" Opacity="0.7"
+                    <FontIcon x:Name="EmptyStateIcon" Glyph="&#xE721;" FontSize="28" Opacity="0.65"
                               HorizontalAlignment="Center" />
-                    <TextBlock x:Name="EmptyStateText" Text="No matches" Opacity="0.68" FontSize="12"
+                    <TextBlock x:Name="EmptyStateText" Text="No matches" Opacity="0.72" FontSize="14"
                                HorizontalAlignment="Center" />
                 </StackPanel>
             </Grid>
 
-            <Grid Grid.Row="2" ColumnSpacing="14" Padding="4,2,4,1">
+            <Grid x:Name="LauncherFooter" Grid.Row="2" ColumnSpacing="14" Padding="6,4,6,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="ResultCountText" VerticalAlignment="Center"
                            Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="11" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
                     <TextBlock Text="↑↓ Navigate" Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="10" />
                     <TextBlock Text="↵ Open" Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="10" />
                     <TextBlock Text="Esc Close" Foreground="{StaticResource LauncherTertiaryTextBrush}" FontSize="10" />

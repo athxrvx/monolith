@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,15 +31,20 @@ internal sealed class MonobarPopupWindow : Window
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
-
     private readonly IntPtr _hwnd;
     private readonly AppWindow _appWindow;
     private readonly int _widthDip;
-    private readonly int _heightDip;
+    private readonly bool _autoHeight;
+    private readonly AcrylicWindowBackdrop? _acrylicBackdrop;
+    private int _heightDip;
+    private NativeRect _anchorRect;
+    private bool _hasAnchorRect;
+    public bool IsVisible => _appWindow.IsVisible;
 
     public MonobarPopupWindow(UIElement content, int width, int height)
     {
         _widthDip = width;
+        _autoHeight = height <= 0;
         var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
         _appWindow = AppWindow.GetFromWindowId(id);
         _appWindow.IsShownInSwitchers = false;
@@ -66,14 +70,27 @@ internal sealed class MonobarPopupWindow : Window
         DwmSetWindowAttribute(_hwnd, DwmwaWindowCornerPreference, ref roundedCorners, sizeof(int));
         int noSystemBorder = DwmColorNone;
         DwmSetWindowAttribute(_hwnd, DwmwaBorderColor, ref noSystemBorder, sizeof(int));
-        // Keep the popup surface owned by WinUI. Applying the legacy accent
-        // policy to a WinUI HWND makes its content render over a black backing.
-        SystemBackdrop = new DesktopAcrylicBackdrop();
+        // Keep XAML content transparent and let WinUI's acrylic controller draw
+        // the backdrop, including while the no-activate bar is in front.
+        SystemBackdrop = null;
+        _acrylicBackdrop = AcrylicWindowBackdrop.Attach(this, 0.24);
+        Closed += (_, _) => _acrylicBackdrop?.Dispose();
         Activated += (_, args) =>
         {
-            if (args.WindowActivationState == WindowActivationState.Deactivated)
+            if (args.WindowActivationState == WindowActivationState.Deactivated && !CursorIsOverAnchor())
                 _appWindow.Hide();
         };
+    }
+
+    public void ResizeToContent()
+    {
+        if (!_autoHeight || Content is not UIElement content) return;
+        var bounds = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
+        double scale = GetDpiForWindow(_hwnd) / 96d;
+        double maxHeightDip = Math.Max(240, (bounds.Height - ToPixels(App.MainViewModel.Config.MonobarHeight) - 24) / scale);
+        content.Measure(new Size(_widthDip, maxHeightDip));
+        _heightDip = Math.Max(1, (int)Math.Ceiling(Math.Min(content.DesiredSize.Height + 6, maxHeightDip)));
+        _appWindow.Resize(new SizeInt32 { Width = ToPixels(_widthDip), Height = ToPixels(_heightDip) });
     }
 
     public void ShowAt(int x, int y)
@@ -89,8 +106,13 @@ internal sealed class MonobarPopupWindow : Window
         Activate();
     }
 
-    public void ShowBelow(UIElement anchor, bool centerOnAnchor = false)
+    public void ShowBelow(UIElement anchor, bool centerOnAnchor = true)
     {
+        if (_appWindow.IsVisible)
+        {
+            _appWindow.Hide();
+            return;
+        }
         var bounds = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
         int width = ToPixels(_widthDip);
         int x = bounds.X + bounds.Width - width - 8;
@@ -102,6 +124,8 @@ internal sealed class MonobarPopupWindow : Window
             int anchorLeft = barRect.Left + (int)Math.Round(origin.X * scale);
             double anchorWidthDip = anchor is FrameworkElement element ? element.ActualWidth : 0;
             int anchorWidth = (int)Math.Round(anchorWidthDip * scale);
+            _anchorRect = new NativeRect { Left = anchorLeft, Top = barRect.Top, Right = anchorLeft + anchorWidth, Bottom = barRect.Bottom };
+            _hasAnchorRect = true;
             x = centerOnAnchor
                 ? anchorLeft + anchorWidth / 2 - width / 2
                 : anchorLeft + anchorWidth - width;
@@ -110,10 +134,20 @@ internal sealed class MonobarPopupWindow : Window
         ShowAt(x, y);
     }
 
+    private bool CursorIsOverAnchor()
+    {
+        if (!_hasAnchorRect || !GetCursorPos(out var point)) return false;
+        return point.X >= _anchorRect.Left && point.X < _anchorRect.Right
+            && point.Y >= _anchorRect.Top && point.Y < _anchorRect.Bottom;
+    }
+
     private int ToPixels(int dip) => (int)Math.Round(dip * GetDpiForWindow(_hwnd) / 96d);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint { public int X, Y; }
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
 }

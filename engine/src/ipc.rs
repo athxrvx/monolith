@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{io, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use tokio::{
-  io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+  io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader},
   net::windows::named_pipe::{NamedPipeServer, ServerOptions},
   sync::{broadcast, Mutex},
 };
@@ -11,6 +11,8 @@ use tracing::{error, info};
 use crate::{config::EngineConfig, tiling::WindowNode};
 
 pub const PIPE_NAME: &str = r"\\.\pipe\monolith_ipc";
+const MAX_IPC_LINE_BYTES: usize = 64 * 1024;
+const MAX_IPC_CLIENTS: usize = 16;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcRequest {
@@ -56,7 +58,9 @@ impl IpcServer {
     info!("Starting Monolith IPC Named Pipe server at {}", PIPE_NAME);
 
     let mut first = true;
+    let clients = Arc::new(tokio::sync::Semaphore::new(MAX_IPC_CLIENTS));
     loop {
+      let permit = clients.clone().acquire_owned().await?;
       let server = match ServerOptions::new()
         .first_pipe_instance(first)
         .create(PIPE_NAME)
@@ -85,6 +89,7 @@ impl IpcServer {
       let mut state_rx = self.state_tx.subscribe();
 
       tokio::spawn(async move {
+        let _permit = permit;
         if let Err(e) = handle_client(
           server,
           client_config,
@@ -109,14 +114,15 @@ async fn handle_client(
   state_rx: &mut broadcast::Receiver<String>,
 ) -> anyhow::Result<()> {
   let (reader, mut writer) = tokio::io::split(server);
-  let mut lines = BufReader::new(reader).lines();
+  let mut reader = BufReader::new(reader);
+  let mut line = Vec::with_capacity(1024);
 
   loop {
     tokio::select! {
-        line = lines.next_line() => {
-            match line? {
+        result = read_bounded_line(&mut reader, &mut line) => {
+            match result? {
                 Some(payload) => {
-                    if let Ok(req) = serde_json::from_str::<IpcRequest>(&payload) {
+                    if let Ok(req) = serde_json::from_slice::<IpcRequest>(&payload) {
                         match req.command.as_str() {
                             "GET_STATE" => {
                                 let cfg = config.lock().await;
@@ -151,4 +157,35 @@ async fn handle_client(
   }
 
   Ok(())
+}
+
+async fn read_bounded_line<R: AsyncBufRead + Unpin>(
+  reader: &mut R,
+  line: &mut Vec<u8>,
+) -> io::Result<Option<Vec<u8>>> {
+  line.clear();
+  loop {
+    let available = reader.fill_buf().await?;
+    if available.is_empty() {
+      return if line.is_empty() { Ok(None) } else { Ok(Some(std::mem::take(line))) };
+    }
+
+    let newline = available.iter().position(|byte| *byte == b'\n');
+    let take = newline.unwrap_or(available.len());
+    let content_len = if newline.is_some() && take > 0 && available[take - 1] == b'\r' {
+      take - 1
+    } else {
+      take
+    };
+    if line.len().saturating_add(content_len) > MAX_IPC_LINE_BYTES {
+      return Err(io::Error::new(io::ErrorKind::InvalidData, "IPC line exceeds size limit"));
+    }
+    line.extend_from_slice(&available[..content_len]);
+    let consumed = take + usize::from(newline.is_some());
+    reader.consume(consumed);
+
+    if newline.is_some() {
+      return Ok(Some(std::mem::take(line)));
+    }
+  }
 }

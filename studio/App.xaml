@@ -22,7 +22,7 @@
 
             <!-- Custom Accent Button Style -->
             <Style x:Key="AccentButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="#60CDFF" />
+                <Setter Property="Background" Value="{StaticResource AccentBlueBrush}" />
                 <Setter Property="Foreground" Value="#202020" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="CornerRadius" Value="4" />

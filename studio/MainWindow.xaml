@@ -56,6 +56,16 @@
                         <FontIcon Glyph="&#xE8A7;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem Content="MonoLauncher" Tag="MonoLauncher">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE721;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="MonoDock" Tag="MonoDock">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8A1;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Content="Window Rules" Tag="Rules">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8B7;"/>
@@ -78,3 +88,5 @@
         </NavigationView>
     </Grid>
 </Window>
+
+

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.UI.Xaml;
@@ -10,13 +12,29 @@ using Monolith.Studio.Services;
 
 namespace Monolith.Studio;
 
-/// <summary>An icon-only strip of open top-level application windows.</summary>
+/// <summary>Shows one stable icon per running application, grouping its windows together.</summary>
 internal sealed class TaskbarMonobarModule : MonobarModuleBase
 {
-    private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+    private const int MaxVisibleApps = 7;
+    private const double IconButtonWidth = 30;
+    private const double IconSpacing = 3;
+    private static readonly HashSet<string> NonTaskbarProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "TextInputHost",
+        "WindowsInputExperience",
+        "InputApp",
+        "TabTip"
+    };
+    private readonly StackPanel _buttons = new()
+    {
+        Orientation = Orientation.Horizontal,
+        Spacing = IconSpacing,
+        VerticalAlignment = VerticalAlignment.Center
+    };
     private readonly ScrollViewer _scroll;
+    private readonly Border _container;
     private readonly int _ownPid = Environment.ProcessId;
-    private IntPtr[] _lastWindows = Array.Empty<IntPtr>();
+    private readonly Dictionary<string, AppGroupState> _groups = new(StringComparer.OrdinalIgnoreCase);
     private DateTime _lastRefresh = DateTime.MinValue;
 
     public TaskbarMonobarModule(MainWindow owner) : base(owner)
@@ -24,22 +42,23 @@ internal sealed class TaskbarMonobarModule : MonobarModuleBase
         _scroll = new ScrollViewer
         {
             Content = _buttons,
-            Width = 420,
+            Width = 0,
             Height = ModuleHeight,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             ZoomMode = ZoomMode.Disabled
         };
-        Element = new Border
+        _container = new Border
         {
             Height = ModuleHeight,
-            MaxWidth = 430,
-            Padding = new Thickness(3, 0, 3, 0),
+            Width = 0,
+            Padding = new Thickness(0),
             Background = Brush(18),
             CornerRadius = new CornerRadius(8),
             Child = _scroll,
             VerticalAlignment = VerticalAlignment.Center
         };
+        Element = _container;
         Refresh();
     }
 
@@ -50,47 +69,86 @@ internal sealed class TaskbarMonobarModule : MonobarModuleBase
     {
         if (DateTime.UtcNow - _lastRefresh < TimeSpan.FromMilliseconds(900)) return;
         _lastRefresh = DateTime.UtcNow;
-        var windows = EnumerateApplicationWindows();
-        var handles = new IntPtr[windows.Count];
-        for (int i = 0; i < windows.Count; i++) handles[i] = windows[i].Handle;
-        if (handles.AsSpan().SequenceEqual(_lastWindows))
+        var groups = EnumerateApplicationWindows()
+            .GroupBy(item => GroupKey(item.Executable), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key,
+                group => new AppWindowGroup(group.First().Executable, group.ToList()),
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (string removedKey in _groups.Keys.Where(key => !groups.ContainsKey(key)).ToArray())
         {
-            foreach (var item in windows)
-                if (_buttons.Children[item.Index] is Button button) ToolTipService.SetToolTip(button, item.Title);
-            return;
+            _buttons.Children.Remove(_groups[removedKey].Button);
+            _groups.Remove(removedKey);
         }
 
-        _lastWindows = handles;
-        _buttons.Children.Clear();
-        foreach (var item in windows)
+        foreach (var (key, group) in groups)
         {
-            IntPtr windowHandle = item.Handle;
-            var button = new Button
+            if (!_groups.TryGetValue(key, out var state))
             {
-                Width = 30,
-                Height = ModuleHeight,
-                MinWidth = 30,
-                MinHeight = 0,
-                Padding = new Thickness(0),
-                Background = Brush(22),
-                BorderBrush = Brush(18),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(7),
-                Content = CreateIcon(item.Executable)
-            };
-            ToolTipService.SetToolTip(button, item.Title);
-            button.Click += (_, _) => Activate(windowHandle);
-            _buttons.Children.Add(button);
+                state = new AppGroupState
+                {
+                    Button = new Button
+                    {
+                        Width = 30, Height = ModuleHeight, MinWidth = 30, MinHeight = 0,
+                        Padding = new Thickness(0), Background = Brush(22), BorderBrush = Brush(18),
+                        BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7),
+                        Content = CreateIcon(group.Executable)
+                    },
+                    Windows = group.Windows
+                };
+                _groups.Add(key, state);
+                _buttons.Children.Add(state.Button);
+                string capturedKey = key;
+                state.Button.Click += (_, _) =>
+                {
+                    if (_groups.TryGetValue(capturedKey, out var current) && current.Windows.Count > 0)
+                        Activate(current.Windows[0].Handle);
+                };
+            }
+            else
+            {
+                state.Windows = group.Windows;
+            }
+
+            string appName = Path.GetFileNameWithoutExtension(group.Executable);
+            string titles = string.Join("\n", group.Windows.Select(window => window.Title).Where(title => !string.IsNullOrWhiteSpace(title)).Distinct());
+            ToolTipService.SetToolTip(state.Button, group.Windows.Count > 1
+                ? $"{appName} ({group.Windows.Count} windows)\n{titles}"
+                : $"{appName}\n{titles}");
         }
+
+        int visibleCount = Math.Min(groups.Count, MaxVisibleApps);
+        double contentWidth = visibleCount == 0
+            ? 0
+            : visibleCount * IconButtonWidth + (visibleCount - 1) * IconSpacing;
+        _scroll.Width = contentWidth;
+        _scroll.HorizontalScrollBarVisibility = groups.Count > MaxVisibleApps
+            ? ScrollBarVisibility.Auto
+            : ScrollBarVisibility.Disabled;
+        _container.Width = contentWidth == 0 ? 0 : contentWidth + 6;
+        _container.Padding = contentWidth == 0 ? new Thickness(0) : new Thickness(3, 0, 3, 0);
+    }
+
+    private static string GroupKey(string executable)
+    {
+        if (string.IsNullOrWhiteSpace(executable)) return "unknown";
+        try { return Path.GetFullPath(executable).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant(); }
+        catch { return executable.ToUpperInvariant(); }
     }
 
     private static UIElement CreateIcon(string executable)
     {
         try
         {
-            var path = ShellIconCache.GetIconPath(executable);
+            string? path = ShellIconCache.GetIconPath(executable);
             if (!string.IsNullOrEmpty(path))
-                return new Image { Source = new BitmapImage(new Uri(path)), Width = 18, Height = 18, Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform };
+                return new Image
+                {
+                    Source = new BitmapImage(new Uri(path)),
+                    Width = 18,
+                    Height = 18,
+                    Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform
+                };
         }
         catch { }
         return new FontIcon { Glyph = "\uE7F4", FontSize = 15 };
@@ -106,21 +164,35 @@ internal sealed class TaskbarMonobarModule : MonobarModuleBase
             if ((exStyle & WsExToolWindow) != 0) return true;
             int length = GetWindowTextLength(hwnd);
             if (length <= 0) return true;
-            int pid;
-            GetWindowThreadProcessId(hwnd, out pid);
+            GetWindowThreadProcessId(hwnd, out int pid);
             if (pid == _ownPid) return true;
+
             var title = new StringBuilder(length + 1);
             GetWindowText(hwnd, title, title.Capacity);
-            if (string.IsNullOrWhiteSpace(title.ToString())) return true;
+            string windowTitle = title.ToString();
+            if (string.IsNullOrWhiteSpace(windowTitle)
+                || windowTitle.Equals("Windows Input Experience", StringComparison.OrdinalIgnoreCase)) return true;
 
             string executable = string.Empty;
+            string processName = string.Empty;
             try
             {
                 using var process = Process.GetProcessById(pid);
+                processName = process.ProcessName;
                 executable = process.MainModule?.FileName ?? process.ProcessName + ".exe";
             }
-            catch { }
-            result.Add(new AppWindowInfo(hwnd, title.ToString(), executable, result.Count));
+            catch
+            {
+                try
+                {
+                    using var process = Process.GetProcessById(pid);
+                    processName = process.ProcessName;
+                    executable = process.ProcessName + ".exe";
+                }
+                catch { }
+            }
+            if (NonTaskbarProcessNames.Contains(processName)) return true;
+            result.Add(new AppWindowInfo(hwnd, windowTitle, executable));
             return true;
         }, IntPtr.Zero);
         return result;
@@ -138,7 +210,13 @@ internal sealed class TaskbarMonobarModule : MonobarModuleBase
     private const long WsExToolWindow = 0x80;
     private const int SwRestore = 9;
     private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr lParam);
-    private readonly record struct AppWindowInfo(IntPtr Handle, string Title, string Executable, int Index);
+    private sealed class AppGroupState
+    {
+        public required Button Button { get; init; }
+        public List<AppWindowInfo> Windows { get; set; } = new();
+    }
+    private sealed record AppWindowGroup(string Executable, List<AppWindowInfo> Windows);
+    private readonly record struct AppWindowInfo(IntPtr Handle, string Title, string Executable);
 
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
