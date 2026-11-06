@@ -4,12 +4,12 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Monolith.Studio.Views;
 
-public sealed partial class MonoLauncherPage : Page
+public sealed partial class LauncherPage : Page
 {
     private bool _ready;
     private readonly DispatcherTimer _saveTimer;
 
-    public MonoLauncherPage()
+    public LauncherPage()
     {
         InitializeComponent();
         var config = App.MainViewModel.Config;

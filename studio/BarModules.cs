@@ -19,7 +19,7 @@ using Windows.UI.ViewManagement;
 
 namespace Monolith.Studio;
 
-internal interface IMonobarModule
+internal interface IBarModule
 {
     string Id { get; }
     UIElement Element { get; }
@@ -27,12 +27,12 @@ internal interface IMonobarModule
     void Dispose();
 }
 
-internal abstract class MonobarModuleBase : IMonobarModule
+internal abstract class BarModuleBase : IBarModule
 {
     // Keep pills inset from the 32 px default bar so they have a visible 4 px breathing gap above and below.
     protected const double ModuleHeight = 24;
     protected readonly MainWindow Owner;
-    protected MonobarModuleBase(MainWindow owner) => Owner = owner;
+    protected BarModuleBase(MainWindow owner) => Owner = owner;
     public abstract string Id { get; }
     public abstract UIElement Element { get; }
     public virtual void Refresh() { }
@@ -40,7 +40,7 @@ internal abstract class MonobarModuleBase : IMonobarModule
 
     protected static SolidColorBrush Brush(byte alpha, byte red = 255, byte green = 255, byte blue = 255) => new(Windows.UI.Color.FromArgb(alpha, red, green, blue));
 
-    internal static SolidColorBrush AccentBrush(byte? alpha = null) => MonobarAccent.Brush(alpha ?? 255);
+    internal static SolidColorBrush AccentBrush(byte? alpha = null) => BarAccent.Brush(alpha ?? 255);
 
     protected static void ApplyAccent(Slider slider)
     {
@@ -68,11 +68,11 @@ internal abstract class MonobarModuleBase : IMonobarModule
     }
 }
 
-internal static class MonobarAccent
+internal static class BarAccent
 {
     private static readonly Dictionary<byte, SolidColorBrush> Brushes = new();
 
-    static MonobarAccent()
+    static BarAccent()
     {
         AccentColorService.AccentChanged += UpdateBrushes;
     }
@@ -98,16 +98,16 @@ internal static class MonobarAccent
     }
 }
 
-internal sealed class LauncherMonobarModule : MonobarModuleBase
+internal sealed class LauncherBarModule : BarModuleBase
 {
-    public LauncherMonobarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE721", "Search apps and actions", (_, _) => Owner.ToggleLauncher());
+    public LauncherBarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE721", "Search apps and actions", (_, _) => Owner.ToggleLauncher());
     public override string Id => "launcher";
     public override UIElement Element { get; }
 }
 
-internal sealed class SystemTrayMonobarModule : MonobarModuleBase
+internal sealed class SystemTrayBarModule : BarModuleBase
 {
-    public SystemTrayMonobarModule(MainWindow owner) : base(owner)
+    public SystemTrayBarModule(MainWindow owner) : base(owner)
     {
         Element = IconButton("\uE70D", "Open Windows notification area", (_, _) => _ = OpenNativeTrayAsync());
     }
@@ -133,10 +133,10 @@ internal sealed class SystemTrayMonobarModule : MonobarModuleBase
     [DllImport("user32.dll", EntryPoint = "keybd_event")] private static extern void KeybdEvent(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
 }
 
-internal sealed class WorkspacesMonobarModule : MonobarModuleBase
+internal sealed class WorkspacesBarModule : BarModuleBase
 {
     private readonly Button[] _buttons = new Button[5];
-    public WorkspacesMonobarModule(MainWindow owner) : base(owner)
+    public WorkspacesBarModule(MainWindow owner) : base(owner)
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 1; i <= 5; i++)
@@ -184,7 +184,7 @@ internal sealed class WorkspacesMonobarModule : MonobarModuleBase
     }
 }
 
-internal sealed class WindowTitleMonobarModule : MonobarModuleBase
+internal sealed class WindowTitleBarModule : BarModuleBase
 {
     private readonly TextBlock _title = new()
     {
@@ -196,7 +196,7 @@ internal sealed class WindowTitleMonobarModule : MonobarModuleBase
     };
     private string _lastTitle = string.Empty;
 
-    public WindowTitleMonobarModule(MainWindow owner) : base(owner)
+    public WindowTitleBarModule(MainWindow owner) : base(owner)
     {
         Element = new Border
         {
@@ -235,9 +235,9 @@ internal sealed class WindowTitleMonobarModule : MonobarModuleBase
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
 }
 
-internal sealed class ClockMonobarModule : MonobarModuleBase
+internal sealed class ClockBarModule : BarModuleBase
 {
-    private readonly MonobarModuleConfig _config;
+    private readonly BarModuleConfig _config;
     private readonly TextBlock _clock = new() { FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.Medium, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _weekday = new() { FontSize = 13, Opacity = 0.72 };
     private readonly TextBlock _selectedDate = new() { FontSize = 22, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
@@ -245,12 +245,12 @@ internal sealed class ClockMonobarModule : MonobarModuleBase
     private readonly TextBlock _todaySummary = new() { FontSize = 13, Opacity = 0.75 };
     private readonly TextBlock _localClock = new() { FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.Medium };
     private readonly Grid _dayGrid = new() { ColumnSpacing = 4, RowSpacing = 4 };
-    private readonly MonobarPopupWindow _popup;
+    private readonly BarPopupWindow _popup;
     private DateTime _displayMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime _selectedDay = DateTime.Today;
     private bool _calendarBuilt;
 
-    public ClockMonobarModule(MainWindow owner, MonobarModuleConfig config) : base(owner)
+    public ClockBarModule(MainWindow owner, BarModuleConfig config) : base(owner)
     {
         _config = config;
         var button = new Button
@@ -299,7 +299,7 @@ internal sealed class ClockMonobarModule : MonobarModuleBase
         Grid.SetColumn(_localClock, 1); locationRow.Children.Add(_localClock);
         worldClock.Children.Add(locationRow);
         content.Children.Add(CalendarInfoCard("World clocks", worldClock));
-        _popup = new MonobarPopupWindow(MonobarPopupContent.PopupSurface(content, 410, 0), 410, 0);
+        _popup = new BarPopupWindow(BarPopupContent.PopupSurface(content, 410, 0), 410, 0);
         button.Click += (_, _) => ShowCalendar(button);
         Element = button;
         Refresh();
@@ -366,10 +366,10 @@ internal sealed class ClockMonobarModule : MonobarModuleBase
     }
 }
 
-internal abstract class PopupMonobarModule : MonobarModuleBase
+internal abstract class PopupBarModule : BarModuleBase
 {
-    protected MonobarPopupWindow Popup = null!;
-    protected PopupMonobarModule(MainWindow owner, string glyph, string title, bool grouped = false) : base(owner)
+    protected BarPopupWindow Popup = null!;
+    protected PopupBarModule(MainWindow owner, string glyph, string title, bool grouped = false) : base(owner)
     {
         var button = grouped
             ? GroupedIconButton(glyph, title, (_, _) => ShowPopup())
@@ -380,7 +380,7 @@ internal abstract class PopupMonobarModule : MonobarModuleBase
     public override UIElement Element { get; }
     public override void Dispose() => Popup.Close();
     protected void InitializePopup(UIElement content, int width, int height) =>
-        Popup = new MonobarPopupWindow(MonobarPopupContent.PopupSurface(content, width, height), width, height);
+        Popup = new BarPopupWindow(BarPopupContent.PopupSurface(content, width, height), width, height);
     protected void ShowPopup()
     {
         Popup.ShowBelow(Element);
@@ -408,17 +408,17 @@ internal abstract class PopupMonobarModule : MonobarModuleBase
     }
 }
 
-internal sealed class WifiMonobarModule : PopupMonobarModule
+internal sealed class WifiBarModule : PopupBarModule
 {
     private readonly TextBlock _state = new() { FontSize = 13, Opacity = 0.72 };
     private readonly Button _toggle = new() { MinWidth = 92, Height = 32, MinHeight = 0, Padding = new Thickness(10, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
     private bool? _enabled;
-    public WifiMonobarModule(MainWindow owner, bool grouped = false) : base(owner, "\uE701", "Wi-Fi", grouped)
+    public WifiBarModule(MainWindow owner, bool grouped = false) : base(owner, "\uE701", "Wi-Fi", grouped)
     {
         var content = new StackPanel { Width = 300, Spacing = 12 };
-        content.Children.Add(MonobarPopupContent.Header("\uE701", "Wi-Fi", "Network connection"));
-        var status = MonobarPopupContent.Card();
-        var row = MonobarPopupContent.Row();
+        content.Children.Add(BarPopupContent.Header("\uE701", "Wi-Fi", "Network connection"));
+        var status = BarPopupContent.Card();
+        var row = BarPopupContent.Row();
         var details = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         details.Children.Add(new TextBlock { Text = "Connection", FontSize = 12, Opacity = 0.62 });
         details.Children.Add(_state);
@@ -430,7 +430,7 @@ internal sealed class WifiMonobarModule : PopupMonobarModule
         InitializePopup(content, 340, 0);
         _toggle.Click += async (_, _) =>
         {
-            var state = await MonobarSystemStatus.SetRadioStateAsync(RadioKind.WiFi, !(_enabled ?? false));
+            var state = await BarSystemStatus.SetRadioStateAsync(RadioKind.WiFi, !(_enabled ?? false));
             if (state.HasValue) _enabled = state;
             Refresh();
         };
@@ -440,15 +440,15 @@ internal sealed class WifiMonobarModule : PopupMonobarModule
     public override void Refresh()
     {
         if (!Popup.IsVisible) return;
-        var network = MonobarSystemStatus.GetNetworkStatus();
+        var network = BarSystemStatus.GetNetworkStatus();
         _state.Text = _enabled.HasValue ? $"{(_enabled.Value ? "On" : "Off")} · {network.Label}" : "Wi-Fi status unavailable";
         _toggle.IsEnabled = _enabled.HasValue;
         _toggle.Content = _enabled == true ? "Turn off" : "Turn on";
     }
-    private async System.Threading.Tasks.Task LoadStateAsync() { _enabled = await MonobarSystemStatus.GetRadioStateAsync(RadioKind.WiFi); Refresh(); }
+    private async System.Threading.Tasks.Task LoadStateAsync() { _enabled = await BarSystemStatus.GetRadioStateAsync(RadioKind.WiFi); Refresh(); }
 }
 
-internal sealed class VolumeMonobarModule : PopupMonobarModule
+internal sealed class VolumeBarModule : PopupBarModule
 {
     private readonly Slider _slider = new() { Minimum = 0, Maximum = 100, StepFrequency = 1, Height = 40, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock _value = new() { FontSize = 13 };
@@ -464,12 +464,12 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
     private DateTime _lastRead = DateTime.MinValue;
     private DateTime _lastSourcesRead = DateTime.MinValue;
     private bool _sourcesReading;
-    public VolumeMonobarModule(MainWindow owner, bool grouped = false) : base(owner, "\uE995", "Volume", grouped)
+    public VolumeBarModule(MainWindow owner, bool grouped = false) : base(owner, "\uE995", "Volume", grouped)
     {
         var content = new StackPanel { Width = 300, Spacing = 12 };
-        content.Children.Add(MonobarPopupContent.Header("\uE995", "Volume", "Output level"));
-        var card = MonobarPopupContent.Card();
-        var row = MonobarPopupContent.Row();
+        content.Children.Add(BarPopupContent.Header("\uE995", "Volume", "Output level"));
+        var card = BarPopupContent.Card();
+        var row = BarPopupContent.Row();
         row.Children.Add(new TextBlock { Text = "Volume", FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
         _value.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         _value.HorizontalAlignment = HorizontalAlignment.Right;
@@ -478,7 +478,7 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
         card.Child = new StackPanel { Spacing = 8, Children = { row, _slider } };
         content.Children.Add(card);
         content.Children.Add(new TextBlock { Text = "Apps", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(2, 2, 0, 0) });
-        var sourcesCard = MonobarPopupContent.Card();
+        var sourcesCard = BarPopupContent.Card();
         var sourceScroll = new ScrollViewer { Content = _sourcesPanel, MaxHeight = 300, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var sourceList = new StackPanel { Spacing = 8, Children = { _sourcesEmpty, sourceScroll } };
         sourcesCard.Child = sourceList;
@@ -490,7 +490,7 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
         {
             _setTimer.Stop();
             int value = _pendingValue;
-            _ = System.Threading.Tasks.Task.Run(() => MonobarSystemStatus.SetVolumePercent(value));
+            _ = System.Threading.Tasks.Task.Run(() => BarSystemStatus.SetVolumePercent(value));
         };
         _slider.ValueChanged += (_, e) =>
         {
@@ -531,7 +531,7 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
     private async System.Threading.Tasks.Task RefreshVolumeAsync()
     {
         _reading = true;
-        int value = await System.Threading.Tasks.Task.Run(MonobarSystemStatus.GetVolumePercent);
+        int value = await System.Threading.Tasks.Task.Run(BarSystemStatus.GetVolumePercent);
         _reading = false;
         if (_disposed || !Popup.IsVisible || _dragging) return;
         _updating = true;
@@ -543,7 +543,7 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
     private async System.Threading.Tasks.Task RefreshSourcesAsync()
     {
         _sourcesReading = true;
-        var sources = await System.Threading.Tasks.Task.Run(MonobarSystemStatus.GetAudioSourceVolumes);
+        var sources = await System.Threading.Tasks.Task.Run(BarSystemStatus.GetAudioSourceVolumes);
         _sourcesReading = false;
         if (_disposed || !Popup.IsVisible) return;
 
@@ -576,11 +576,11 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
         Popup.ResizeToContent();
     }
 
-    private AudioSourceRow CreateAudioSourceRow(Monolith.Studio.Services.MonobarSystemStatus.AudioSourceVolume source)
+    private AudioSourceRow CreateAudioSourceRow(Monolith.Studio.Services.BarSystemStatus.AudioSourceVolume source)
     {
         var name = new TextBlock { Text = source.Name, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var value = new TextBlock { Text = $"{source.VolumePercent}%", FontSize = 11, Opacity = 0.7, HorizontalAlignment = HorizontalAlignment.Right };
-        var heading = MonobarPopupContent.Row();
+        var heading = BarPopupContent.Row();
         heading.Children.Add(name);
         Grid.SetColumn(value, 1);
         heading.Children.Add(value);
@@ -593,7 +593,7 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
         {
             timer.Stop();
             int volume = (int)slider.Value;
-            _ = System.Threading.Tasks.Task.Run(() => MonobarSystemStatus.SetAudioSourceVolume(source.Id, volume));
+            _ = System.Threading.Tasks.Task.Run(() => BarSystemStatus.SetAudioSourceVolume(source.Id, volume));
         };
         slider.ValueChanged += (_, e) =>
         {
@@ -621,7 +621,7 @@ internal sealed class VolumeMonobarModule : PopupMonobarModule
     }
 }
 
-internal sealed class BatteryMonobarModule : PopupMonobarModule
+internal sealed class BatteryBarModule : PopupBarModule
 {
     private readonly TextBlock _status = new() { FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.Medium };
     private readonly TextBlock _brightnessValue = new() { FontSize = 12, Opacity = 0.72, HorizontalAlignment = HorizontalAlignment.Right };
@@ -633,19 +633,19 @@ internal sealed class BatteryMonobarModule : PopupMonobarModule
     private readonly DispatcherTimer _brightnessSetTimer;
     private int _pendingBrightness;
     private bool _disposed;
-    public BatteryMonobarModule(MainWindow owner, bool grouped = false) : base(owner, "\uEBAA", "Battery and brightness", grouped)
+    public BatteryBarModule(MainWindow owner, bool grouped = false) : base(owner, "\uEBAA", "Battery and brightness", grouped)
     {
         var content = new StackPanel { Width = 300, Spacing = 12 };
-        content.Children.Add(MonobarPopupContent.Header("\uEBAA", "Power", "Battery and display"));
-        var batteryCard = MonobarPopupContent.Card();
-        var batteryRow = MonobarPopupContent.Row();
+        content.Children.Add(BarPopupContent.Header("\uEBAA", "Power", "Battery and display"));
+        var batteryCard = BarPopupContent.Card();
+        var batteryRow = BarPopupContent.Row();
         batteryRow.Children.Add(new FontIcon { Glyph = "\uEBAA", FontSize = 16, Opacity = 0.8, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(_status, 1);
         batteryRow.Children.Add(_status);
         batteryCard.Child = batteryRow;
         content.Children.Add(batteryCard);
-        var brightnessCard = MonobarPopupContent.Card();
-        var brightnessRow = MonobarPopupContent.Row();
+        var brightnessCard = BarPopupContent.Card();
+        var brightnessRow = BarPopupContent.Row();
         brightnessRow.Children.Add(new TextBlock { Text = "Brightness", FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(_brightnessValue, 1);
         brightnessRow.Children.Add(_brightnessValue);
@@ -658,7 +658,7 @@ internal sealed class BatteryMonobarModule : PopupMonobarModule
         {
             _brightnessSetTimer.Stop();
             int value = _pendingBrightness;
-            _ = System.Threading.Tasks.Task.Run(() => MonobarSystemStatus.SetBrightnessPercent(value));
+            _ = System.Threading.Tasks.Task.Run(() => BarSystemStatus.SetBrightnessPercent(value));
         };
         _brightness.ValueChanged += (_, e) =>
         {
@@ -676,7 +676,7 @@ internal sealed class BatteryMonobarModule : PopupMonobarModule
     public override void Refresh()
     {
         if (!Popup.IsVisible) return;
-        var status = MonobarSystemStatus.GetBatteryStatus();
+        var status = BarSystemStatus.GetBatteryStatus();
         _status.Text = status.HasBattery ? $"{status.Percent}% · {(status.Charging ? "Charging" : "On battery")}" : "Connected to power";
         if (!_draggingBrightness && !_brightnessLookupInProgress && DateTime.UtcNow - _brightnessUpdated > TimeSpan.FromSeconds(10))
         {
@@ -695,7 +695,7 @@ internal sealed class BatteryMonobarModule : PopupMonobarModule
     private async System.Threading.Tasks.Task RefreshBrightnessAsync()
     {
         _brightnessLookupInProgress = true;
-        int? brightness = await System.Threading.Tasks.Task.Run(MonobarSystemStatus.GetBrightnessPercent);
+        int? brightness = await System.Threading.Tasks.Task.Run(BarSystemStatus.GetBrightnessPercent);
         _brightnessLookupInProgress = false;
         if (_disposed || _draggingBrightness) return;
         if (brightness.HasValue)
@@ -714,16 +714,16 @@ internal sealed class BatteryMonobarModule : PopupMonobarModule
     }
 }
 
-internal sealed class SystemStatusMonobarModule : MonobarModuleBase
+internal sealed class SystemStatusBarModule : BarModuleBase
 {
-    private readonly PopupMonobarModule[] _controls;
+    private readonly PopupBarModule[] _controls;
 
-    public SystemStatusMonobarModule(MainWindow owner) : base(owner)
+    public SystemStatusBarModule(MainWindow owner) : base(owner)
     {
-        var wifi = new WifiMonobarModule(owner, grouped: true);
-        var volume = new VolumeMonobarModule(owner, grouped: true);
-        var battery = new BatteryMonobarModule(owner, grouped: true);
-        _controls = new PopupMonobarModule[] { wifi, volume, battery };
+        var wifi = new WifiBarModule(owner, grouped: true);
+        var volume = new VolumeBarModule(owner, grouped: true);
+        var battery = new BatteryBarModule(owner, grouped: true);
+        _controls = new PopupBarModule[] { wifi, volume, battery };
         var icons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -762,14 +762,14 @@ internal sealed class SystemStatusMonobarModule : MonobarModuleBase
     }
 }
 
-internal sealed class NetworkSpeedMonobarModule : PopupMonobarModule
+internal sealed class NetworkSpeedBarModule : PopupBarModule
 {
     private readonly TextBlock _down = new() { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
     private readonly TextBlock _up = new() { FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-    public NetworkSpeedMonobarModule(MainWindow owner) : base(owner, "\uE774", "Network speed")
+    public NetworkSpeedBarModule(MainWindow owner) : base(owner, "\uE774", "Network speed")
     {
         var content = new StackPanel { Width = 300, Spacing = 12 };
-        content.Children.Add(MonobarPopupContent.Header("\uE774", "Network", "Live traffic"));
+        content.Children.Add(BarPopupContent.Header("\uE774", "Network", "Live traffic"));
         var rates = new Grid { ColumnSpacing = 10 };
         rates.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         rates.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -785,7 +785,7 @@ internal sealed class NetworkSpeedMonobarModule : PopupMonobarModule
     public override void Refresh()
     {
         if (!Popup.IsVisible) return;
-        var (down, up) = MonobarSystemStatus.GetNetworkRates();
+        var (down, up) = BarSystemStatus.GetNetworkRates();
         _down.Text = down;
         _up.Text = up;
     }
@@ -795,13 +795,13 @@ internal sealed class NetworkSpeedMonobarModule : PopupMonobarModule
         body.Children.Add(new FontIcon { Glyph = glyph, FontSize = 15, Opacity = 0.75 });
         body.Children.Add(new TextBlock { Text = label, FontSize = 12, Opacity = 0.65 });
         body.Children.Add(value);
-        var card = MonobarPopupContent.Card();
+        var card = BarPopupContent.Card();
         card.Child = body;
         return card;
     }
 }
 
-internal sealed class MediaMonobarModule : PopupMonobarModule
+internal sealed class MediaBarModule : PopupBarModule
 {
     private const string Font = "Segoe MDL2 Assets";
     private readonly Image _cover = new() { Width = 72, Height = 72, Stretch = Stretch.UniformToFill };
@@ -823,7 +823,7 @@ internal sealed class MediaMonobarModule : PopupMonobarModule
     private TimeSpan _trackStart;
     private TimeSpan _trackEnd;
 
-    public MediaMonobarModule(MainWindow owner) : base(owner, "\uE768", "Media controls")
+    public MediaBarModule(MainWindow owner) : base(owner, "\uE768", "Media controls")
     {
         var coverFrame = new Border { Width = 72, Height = 72, CornerRadius = new CornerRadius(8), Background = Brush(24), Child = _cover, VerticalAlignment = VerticalAlignment.Center };
         var metadata = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
@@ -856,7 +856,7 @@ internal sealed class MediaMonobarModule : PopupMonobarModule
 
         var content = new StackPanel { Width = 360, Spacing = 10 };
         content.Children.Add(_source);
-        var card = MonobarPopupContent.Card();
+        var card = BarPopupContent.Card();
         var player = new StackPanel { Spacing = 8 };
         player.Children.Add(trackRow);
         player.Children.Add(timeline);
@@ -924,7 +924,7 @@ internal sealed class MediaMonobarModule : PopupMonobarModule
         }
         catch (Exception ex)
         {
-            App.LogStartup("Unable to refresh Monobar media controls", ex);
+            App.LogStartup("Unable to refresh Bar media controls", ex);
             SetTrack("unavailable", "Media unavailable", "", null);
             UpdatePlaybackState(false);
         }
@@ -948,14 +948,14 @@ internal sealed class MediaMonobarModule : PopupMonobarModule
         if (_updatingPosition || _session is null || _trackEnd <= _trackStart) return;
         var target = _trackStart + TimeSpan.FromTicks((long)((_trackEnd - _trackStart).Ticks * _position.Value / 100));
         try { await _session.TryChangePlaybackPositionAsync(target.Ticks); }
-        catch (Exception ex) { App.LogStartup("Unable to seek Monobar media", ex); }
+        catch (Exception ex) { App.LogStartup("Unable to seek Bar media", ex); }
     }
 
     private async System.Threading.Tasks.Task SendCommandAsync(Func<System.Threading.Tasks.Task> command)
     {
         if (_session is null) return;
         try { await command(); }
-        catch (Exception ex) { App.LogStartup("Unable to control Monobar media", ex); }
+        catch (Exception ex) { App.LogStartup("Unable to control Bar media", ex); }
         _lastRefresh = DateTime.MinValue;
         Refresh();
     }
@@ -1006,11 +1006,11 @@ internal sealed class MediaMonobarModule : PopupMonobarModule
     }
 }
 
-internal sealed class WallpaperMonobarModule : MonobarModuleBase
+internal sealed class WallpaperBarModule : BarModuleBase
 {
     private readonly MainWindow _owner;
-    private readonly MonobarPopupWindow _popup;
-    private readonly MonobarModuleConfig _config;
+    private readonly BarPopupWindow _popup;
+    private readonly BarModuleConfig _config;
     private readonly Grid _wallpaperGrid = new()
     {
         ColumnSpacing = 10,
@@ -1024,7 +1024,7 @@ internal sealed class WallpaperMonobarModule : MonobarModuleBase
     private string? _selectedWallpaperPath;
     private bool _hasLoadedWallpapers;
 
-    public WallpaperMonobarModule(MainWindow owner, MonobarModuleConfig config) : base(owner)
+    public WallpaperBarModule(MainWindow owner, BarModuleConfig config) : base(owner)
     {
         _owner = owner;
         _config = config;
@@ -1035,8 +1035,8 @@ internal sealed class WallpaperMonobarModule : MonobarModuleBase
         var apply = new Button { Content = "Set wallpaper", Height = 34, MinHeight = 0 };
         apply.Click += (_, _) => ApplySelectedWallpaper();
         var content = new StackPanel { Width = 520, Spacing = 12 };
-        content.Children.Add(MonobarPopupContent.Header("\uE91B", "Wallpaper", "Personalize your desktop"));
-        var card = MonobarPopupContent.Card();
+        content.Children.Add(BarPopupContent.Header("\uE91B", "Wallpaper", "Personalize your desktop"));
+        var card = BarPopupContent.Card();
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         actions.Children.Add(refresh);
         actions.Children.Add(apply);
@@ -1056,7 +1056,7 @@ internal sealed class WallpaperMonobarModule : MonobarModuleBase
             }
         };
         content.Children.Add(card);
-        _popup = new MonobarPopupWindow(MonobarPopupContent.PopupSurface(content, 560, 0), 560, 0);
+        _popup = new BarPopupWindow(BarPopupContent.PopupSurface(content, 560, 0), 560, 0);
         Element = IconButton("\uE91B", "Wallpaper picker", (_, _) => ShowPopup());
     }
     public override string Id => "wallpaper";
@@ -1071,7 +1071,7 @@ internal sealed class WallpaperMonobarModule : MonobarModuleBase
     private async System.Threading.Tasks.Task LoadWallpapersAsync()
     {
         string folder = _config.WallpaperFolder?.Trim() ?? string.Empty;
-        _status.Text = string.IsNullOrWhiteSpace(folder) ? "Choose a wallpaper folder in Monobar settings." : "Loading images…";
+        _status.Text = string.IsNullOrWhiteSpace(folder) ? "Choose a wallpaper folder in Bar settings." : "Loading images…";
         _wallpaperGrid.Children.Clear();
         _wallpaperGrid.RowDefinitions.Clear();
         _wallpaperCards.Clear();
@@ -1227,7 +1227,7 @@ internal sealed class WallpaperMonobarModule : MonobarModuleBase
     }
 }
 
-internal static class MonobarPopupContent
+internal static class BarPopupContent
 {
     public static Grid Row() => new()
     {
@@ -1255,8 +1255,8 @@ internal static class MonobarPopupContent
             Width = 38,
             Height = 38,
             CornerRadius = new CornerRadius(11),
-            Background = MonobarModuleBase.AccentBrush(42),
-            Child = new FontIcon { Glyph = glyph, FontSize = 17, Foreground = MonobarModuleBase.AccentBrush(), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            Background = BarModuleBase.AccentBrush(42),
+            Child = new FontIcon { Glyph = glyph, FontSize = 17, Foreground = BarModuleBase.AccentBrush(), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
         };
         header.Children.Add(icon);
         var labels = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
@@ -1289,25 +1289,25 @@ internal static class NativeWallpaper
     public static void Set(string path) => SystemParametersInfo(20, 0, path, 3);
 }
 
-internal static class MonobarModuleFactory
+internal static class BarModuleFactory
 {
-    public static IMonobarModule? Create(MonobarModuleConfig config, MainWindow owner) => config.Id switch
+    public static IBarModule? Create(BarModuleConfig config, MainWindow owner) => config.Id switch
     {
-        "workspaces" => new WorkspacesMonobarModule(owner),
-        "clock" => new ClockMonobarModule(owner, config),
-        "launcher" => new LauncherMonobarModule(owner),
-        "tray-menu" => new SystemTrayMonobarModule(owner),
-        "taskbar" => new TaskbarMonobarModule(owner),
-        "system-status" => new SystemStatusMonobarModule(owner),
-        "network-speed" => new NetworkSpeedMonobarModule(owner),
-        "media" => new MediaMonobarModule(owner),
-        "wallpaper" => new WallpaperMonobarModule(owner, config),
-        "window-title" => new WindowTitleMonobarModule(owner),
-        "system-monitor" => new SystemMonitorMonobarModule(owner),
-        "task-view" => new TaskViewMonobarModule(owner),
-        "quick-settings" => new QuickSettingsMonobarModule(owner),
-        "show-desktop" => new ShowDesktopMonobarModule(owner),
-        "recycle-bin" => new RecycleBinMonobarModule(owner),
+        "workspaces" => new WorkspacesBarModule(owner),
+        "clock" => new ClockBarModule(owner, config),
+        "launcher" => new LauncherBarModule(owner),
+        "tray-menu" => new SystemTrayBarModule(owner),
+        "taskbar" => new TaskbarBarModule(owner),
+        "system-status" => new SystemStatusBarModule(owner),
+        "network-speed" => new NetworkSpeedBarModule(owner),
+        "media" => new MediaBarModule(owner),
+        "wallpaper" => new WallpaperBarModule(owner, config),
+        "window-title" => new WindowTitleBarModule(owner),
+        "system-monitor" => new SystemMonitorBarModule(owner),
+        "task-view" => new TaskViewBarModule(owner),
+        "quick-settings" => new QuickSettingsBarModule(owner),
+        "show-desktop" => new ShowDesktopBarModule(owner),
+        "recycle-bin" => new RecycleBinBarModule(owner),
         _ => null
     };
 }

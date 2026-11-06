@@ -19,28 +19,19 @@ public class MonolithConfig
     public bool LauncherEnabled { get; set; } = true;
 
     [JsonPropertyName("monobar_enabled")]
-    public bool MonobarEnabled { get; set; } = true;
+    public bool BarEnabled { get; set; } = true;
 
     [JsonPropertyName("monobar_height")]
-    public int MonobarHeight { get; set; } = 32;
+    public int BarHeight { get; set; } = 32;
 
     [JsonPropertyName("monobar_opacity")]
-    public int MonobarOpacity { get; set; } = 88;
+    public int BarOpacity { get; set; } = 88;
 
     [JsonPropertyName("monobar_material")]
-    public string MonobarMaterial { get; set; } = "Acrylic (Frosted Glass)";
+    public string BarMaterial { get; set; } = "Acrylic (Frosted Glass)";
 
     [JsonPropertyName("monobar_modules")]
-    public List<MonobarModuleConfig> MonobarModules { get; set; } = MonobarModuleConfig.CreateDefaults();
-
-    [JsonPropertyName("monodock_enabled")]
-    public bool MonodockEnabled { get; set; } = true;
-
-    [JsonPropertyName("monodock_icon_size")]
-    public int MonodockIconSize { get; set; } = 64;
-
-    [JsonPropertyName("monodock_pinned_apps")]
-    public List<string> MonodockPinnedApps { get; set; } = new() { "explorer.exe", "msedge.exe", "notepad.exe", "wt.exe" };
+    public List<BarModuleConfig> BarModules { get; set; } = BarModuleConfig.CreateDefaults();
 
     [JsonPropertyName("onboarding_completed")]
     public bool OnboardingCompleted { get; set; } = false;
@@ -197,7 +188,7 @@ public class MonolithConfig
     };
 }
 
-public partial class MonobarModuleConfig : ObservableObject
+public partial class BarModuleConfig : ObservableObject
 {
     [ObservableProperty]
     [property: JsonPropertyName("id")]
@@ -228,7 +219,7 @@ public partial class MonobarModuleConfig : ObservableObject
     private string _visibilityCondition = "always";
 
     [JsonIgnore]
-    public List<MonobarConditionOption> AvailableConditions { get; set; } = MonobarConditionOption.BuiltIn;
+    public List<BarConditionOption> AvailableConditions { get; set; } = BarConditionOption.BuiltIn;
 
     [JsonIgnore]
     public Visibility WallpaperSettingsVisibility => Id == "wallpaper" ? Visibility.Visible : Visibility.Collapsed;
@@ -263,9 +254,9 @@ public partial class MonobarModuleConfig : ObservableObject
         "workspaces" => "Switch directly between Monolith workspaces.",
         "clock" => "Show the current time and date.",
         "launcher" => "Open the Monolith command launcher.",
-        "tray-menu" => "Open the Windows taskbar notification area from the Monobar.",
+        "tray-menu" => "Open the Windows taskbar notification area from the Bar.",
         "taskbar" => "Group open windows by app and show one taskbar icon for each app.",
-        "system-status" => "Group network, volume, and battery controls into one Monobar module.",
+        "system-status" => "Group network, volume, and battery controls into one Bar module.",
         "network-speed" => "Show current network upload and download speed.",
         "media" => "Show playback information and media controls.",
         "wallpaper" => "Choose and apply a desktop wallpaper.",
@@ -299,7 +290,7 @@ public partial class MonobarModuleConfig : ObservableObject
         _ => "\uE8A7"
     };
 
-    public static List<MonobarModuleConfig> CreateDefaults() => new()
+    public static List<BarModuleConfig> CreateDefaults() => new()
     {
         new() { Id = "launcher", Enabled = true, Order = 0, Alignment = "Left" },
         new() { Id = "tray-menu", Enabled = false, Order = 1, Alignment = "Left" },
@@ -319,12 +310,12 @@ public partial class MonobarModuleConfig : ObservableObject
     };
 }
 
-public sealed class MonobarConditionOption
+public sealed class BarConditionOption
 {
-    public MonobarConditionOption(string id, string name) { Id = id; Name = name; }
+    public BarConditionOption(string id, string name) { Id = id; Name = name; }
     public string Id { get; set; }
     public string Name { get; set; }
-    public static List<MonobarConditionOption> BuiltIn { get; } = new()
+    public static List<BarConditionOption> BuiltIn { get; } = new()
     {
         new("always", "Always"),
         new("media-playing", "While media is playing"),

@@ -8,7 +8,7 @@ using Windows.Storage.Pickers;
 
 namespace Monolith.Studio.Views;
 
-public sealed partial class MonobarPage : Page
+public sealed partial class BarPage : Page
 {
     private bool _ready;
     private bool _hasPendingChanges;
@@ -16,7 +16,7 @@ public sealed partial class MonobarPage : Page
     private readonly DispatcherTimer _previewTimer;
     private readonly DispatcherTimer _saveTimer;
 
-    public MonobarPage()
+    public BarPage()
     {
         InitializeComponent();
         _previewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
@@ -25,7 +25,7 @@ public sealed partial class MonobarPage : Page
             _previewTimer.Stop();
             if (!_ready) return;
             SyncConfigurationFromControls();
-            App.MainWindowInstance?.ApplyMonobarConfiguration();
+            App.MainWindowInstance?.ApplyBarConfiguration();
         };
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _saveTimer.Tick += (_, _) => SavePendingChanges();
@@ -37,13 +37,13 @@ public sealed partial class MonobarPage : Page
         };
 
         var vm = App.MainViewModel;
-        EnabledToggle.IsOn = vm.Config.MonobarEnabled;
-        HeightSlider.Value = vm.Config.MonobarHeight;
-        MaterialCombo.SelectedItem = vm.Config.MonobarMaterial is "Acrylic (Frosted Glass)" or "Pure OLED Dark"
-            ? vm.Config.MonobarMaterial
+        EnabledToggle.IsOn = vm.Config.BarEnabled;
+        HeightSlider.Value = vm.Config.BarHeight;
+        MaterialCombo.SelectedItem = vm.Config.BarMaterial is "Acrylic (Frosted Glass)" or "Pure OLED Dark"
+            ? vm.Config.BarMaterial
             : "Acrylic (Frosted Glass)";
         InitializeModuleLanes();
-        HeightValue.Text = $"{vm.Config.MonobarHeight} px";
+        HeightValue.Text = $"{vm.Config.BarHeight} px";
 
         EnabledToggle.Toggled += (_, _) => QueueUpdate();
         HeightSlider.ValueChanged += (_, _) => { HeightValue.Text = $"{(int)HeightSlider.Value} px"; QueueUpdate(); };
@@ -58,7 +58,7 @@ public sealed partial class MonobarPage : Page
 
     private async void BrowseWallpaperFolderClicked(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: MonobarModuleConfig module }) return;
+        if (sender is not Button { Tag: BarModuleConfig module }) return;
         try
         {
             var picker = new FolderPicker();
@@ -73,7 +73,7 @@ public sealed partial class MonobarPage : Page
         }
         catch (Exception ex)
         {
-            App.LogStartup("Failed to select the Monobar wallpaper folder", ex);
+            App.LogStartup("Failed to select the Bar wallpaper folder", ex);
         }
     }
 
@@ -81,7 +81,7 @@ public sealed partial class MonobarPage : Page
     {
         if (sender is Button { Tag: string id })
         {
-            App.MainViewModel.MoveMonobarModule(id, -1);
+            App.MainViewModel.MoveBarModule(id, -1);
             QueueUpdate();
         }
     }
@@ -90,7 +90,7 @@ public sealed partial class MonobarPage : Page
     {
         if (sender is Button { Tag: string id })
         {
-            App.MainViewModel.MoveMonobarModule(id, 1);
+            App.MainViewModel.MoveBarModule(id, 1);
             QueueUpdate();
         }
     }
@@ -110,10 +110,10 @@ public sealed partial class MonobarPage : Page
     private void SyncConfigurationFromControls()
     {
         var vm = App.MainViewModel;
-        vm.Config.MonobarEnabled = EnabledToggle.IsOn;
-        vm.Config.MonobarHeight = (int)HeightSlider.Value;
-        if (MaterialCombo.SelectedItem is string material) vm.Config.MonobarMaterial = material;
-        vm.Config.MonobarModules = new List<MonobarModuleConfig>(vm.MonobarModules);
+        vm.Config.BarEnabled = EnabledToggle.IsOn;
+        vm.Config.BarHeight = (int)HeightSlider.Value;
+        if (MaterialCombo.SelectedItem is string material) vm.Config.BarMaterial = material;
+        vm.Config.BarModules = new List<BarModuleConfig>(vm.BarModules);
     }
 
     private void SavePendingChanges()
@@ -130,9 +130,9 @@ public sealed partial class MonobarPage : Page
     private static string CaptureSnapshot()
     {
         var vm = App.MainViewModel;
-        string modules = string.Join("|", vm.MonobarModules.OrderBy(module => module.Order)
+        string modules = string.Join("|", vm.BarModules.OrderBy(module => module.Order)
             .Select(module => $"{module.Id}:{module.Enabled}:{module.Order}:{module.Alignment}:{module.WallpaperFolder}:{module.ClockUse24Hour}:{module.VisibilityCondition}"));
-        return $"{vm.Config.MonobarEnabled}:{vm.Config.MonobarHeight}:{vm.Config.MonobarMaterial}|{modules}";
+        return $"{vm.Config.BarEnabled}:{vm.Config.BarHeight}:{vm.Config.BarMaterial}|{modules}";
     }
 }
 

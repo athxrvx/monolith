@@ -182,7 +182,7 @@ public partial class App : Application
             if (App.Current is App configuredApp && configuredApp._window is MainWindow configuredMainWindow)
             {
                 configuredMainWindow.SetLauncherAvailable(MainViewModel.Config.MonolithEnabled && MainViewModel.Config.LauncherEnabled);
-                configuredMainWindow.ApplyMonobarConfiguration();
+                configuredMainWindow.ApplyBarConfiguration();
                 if (!IsBackgroundLaunch && !MainViewModel.Config.OnboardingCompleted)
                     await configuredMainWindow.ShowOnboardingIfNeededAsync();
             }

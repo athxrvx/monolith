@@ -1,8 +1,8 @@
 <Window
-    x:Class="Monolith.Studio.MonobarWindow"
+    x:Class="Monolith.Studio.BarWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Monobar">
+    Title="Bar">
     <Border x:Name="BarSurface" Background="#001C1C1C" BorderBrush="#28FFFFFF"
             BorderThickness="0,0,0,1" Padding="12,0">
         <Grid>

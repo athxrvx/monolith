@@ -9,7 +9,7 @@ using Windows.Graphics;
 
 namespace Monolith.Studio;
 
-internal sealed class MonobarPopupWindow : Window
+internal sealed class BarPopupWindow : Window
 {
     private const int GwlStyle = -16;
     private const int GwlExStyle = -20;
@@ -41,7 +41,7 @@ internal sealed class MonobarPopupWindow : Window
     private bool _hasAnchorRect;
     public bool IsVisible => _appWindow.IsVisible;
 
-    public MonobarPopupWindow(UIElement content, int width, int height)
+    public BarPopupWindow(UIElement content, int width, int height)
     {
         _widthDip = width;
         _autoHeight = height <= 0;
@@ -54,7 +54,7 @@ internal sealed class MonobarPopupWindow : Window
         {
             var bounds = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
             double scale = GetDpiForWindow(_hwnd) / 96d;
-            double maxHeightDip = Math.Max(240, (bounds.Height - ToPixels(App.MainViewModel.Config.MonobarHeight) - 24) / scale);
+            double maxHeightDip = Math.Max(240, (bounds.Height - ToPixels(App.MainViewModel.Config.BarHeight) - 24) / scale);
             content.Measure(new Size(width, maxHeightDip));
             // Controls can report fractional desired sizes before their templates render.
             // Leave a small layout allowance so the last row is not clipped by the HWND.
@@ -87,7 +87,7 @@ internal sealed class MonobarPopupWindow : Window
         if (!_autoHeight || Content is not UIElement content) return;
         var bounds = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
         double scale = GetDpiForWindow(_hwnd) / 96d;
-        double maxHeightDip = Math.Max(240, (bounds.Height - ToPixels(App.MainViewModel.Config.MonobarHeight) - 24) / scale);
+        double maxHeightDip = Math.Max(240, (bounds.Height - ToPixels(App.MainViewModel.Config.BarHeight) - 24) / scale);
         content.Measure(new Size(_widthDip, maxHeightDip));
         _heightDip = Math.Max(1, (int)Math.Ceiling(Math.Min(content.DesiredSize.Height + 6, maxHeightDip)));
         _appWindow.Resize(new SizeInt32 { Width = ToPixels(_widthDip), Height = ToPixels(_heightDip) });
@@ -116,10 +116,10 @@ internal sealed class MonobarPopupWindow : Window
         var bounds = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
         int width = ToPixels(_widthDip);
         int x = bounds.X + bounds.Width - width - 8;
-        int y = bounds.Y + ToPixels(App.MainViewModel.Config.MonobarHeight) + 4;
-        if (MonobarWindow.BarHandle != IntPtr.Zero && GetWindowRect(MonobarWindow.BarHandle, out var barRect))
+        int y = bounds.Y + ToPixels(App.MainViewModel.Config.BarHeight) + 4;
+        if (BarWindow.BarHandle != IntPtr.Zero && GetWindowRect(BarWindow.BarHandle, out var barRect))
         {
-            double scale = GetDpiForWindow(MonobarWindow.BarHandle) / 96d;
+            double scale = GetDpiForWindow(BarWindow.BarHandle) / 96d;
             Point origin = anchor.TransformToVisual(null).TransformPoint(new Point(0, 0));
             int anchorLeft = barRect.Left + (int)Math.Round(origin.X * scale);
             double anchorWidthDip = anchor is FrameworkElement element ? element.ActualWidth : 0;

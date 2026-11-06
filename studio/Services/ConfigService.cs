@@ -28,14 +28,14 @@ public class ConfigService
                 var config = JsonSerializer.Deserialize<MonolithConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (config != null)
                 {
-                    bool migratedMonobarHeight = config.MonobarHeight == 48;
-                    if (migratedMonobarHeight)
-                        config.MonobarHeight = 32;
-                    var monobarDefaults = MonobarModuleConfig.CreateDefaults();
-                    var oldModules = config.MonobarModules ?? new System.Collections.Generic.List<MonobarModuleConfig>();
-                    var migratedMonobarModules = new System.Collections.Generic.List<MonobarModuleConfig>();
-                    bool monobarModulesChanged = oldModules.Count != monobarDefaults.Count;
-                    foreach (var defaultModule in monobarDefaults)
+                    bool migratedBarHeight = config.BarHeight == 48;
+                    if (migratedBarHeight)
+                        config.BarHeight = 32;
+                    var barDefaults = BarModuleConfig.CreateDefaults();
+                    var oldModules = config.BarModules ?? new System.Collections.Generic.List<BarModuleConfig>();
+                    var migratedBarModules = new System.Collections.Generic.List<BarModuleConfig>();
+                    bool barModulesChanged = oldModules.Count != barDefaults.Count;
+                    foreach (var defaultModule in barDefaults)
                     {
                         var previous = oldModules.FirstOrDefault(module =>
                             string.Equals(module.Id, defaultModule.Id, StringComparison.OrdinalIgnoreCase));
@@ -45,7 +45,7 @@ public class ConfigService
                                 module.Id is "wifi" or "volume" or "battery").ToList();
                             if (legacyStatusModules.Count > 0)
                             {
-                                previous = new MonobarModuleConfig
+                                previous = new BarModuleConfig
                                 {
                                     Id = "system-status",
                                     Enabled = legacyStatusModules.Any(module => module.Enabled),
@@ -53,10 +53,10 @@ public class ConfigService
                                     Alignment = legacyStatusModules.FirstOrDefault(module => module.Enabled)?.Alignment
                                         ?? legacyStatusModules[0].Alignment
                                 };
-                                monobarModulesChanged = true;
+                                barModulesChanged = true;
                             }
                         }
-                        migratedMonobarModules.Add(new MonobarModuleConfig
+                        migratedBarModules.Add(new BarModuleConfig
                         {
                             Id = defaultModule.Id,
                             Enabled = previous?.Enabled ?? defaultModule.Enabled,
@@ -67,10 +67,10 @@ public class ConfigService
                             VisibilityCondition = previous?.VisibilityCondition ?? defaultModule.VisibilityCondition
                         });
                         if (previous is null || !string.Equals(previous.Id, defaultModule.Id, StringComparison.OrdinalIgnoreCase))
-                            monobarModulesChanged = true;
+                            barModulesChanged = true;
                     }
-                    monobarModulesChanged |= oldModules.Count != migratedMonobarModules.Count;
-                    config.MonobarModules = migratedMonobarModules;
+                    barModulesChanged |= oldModules.Count != migratedBarModules.Count;
+                    config.BarModules = migratedBarModules;
                     // Migrate legacy BSP/COSMIC preferences to the supported scrolling WM.
                     config.LayoutMode = "Scrolling";
                     bool addedDefaultBinding = false;
@@ -150,7 +150,7 @@ public class ConfigService
                             addedDefaultBinding = true;
                         }
                     }
-                    if (addedDefaultBinding || migratedMonobarHeight || monobarModulesChanged || !string.Equals(sourcePath, ConfigPath, StringComparison.OrdinalIgnoreCase))
+                    if (addedDefaultBinding || migratedBarHeight || barModulesChanged || !string.Equals(sourcePath, ConfigPath, StringComparison.OrdinalIgnoreCase))
                         await SaveConfigAsync(config);
                     return config;
                 }

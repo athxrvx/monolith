@@ -13,7 +13,7 @@ using Monolith.Studio.Services;
 namespace Monolith.Studio;
 
 /// <summary>Shows one stable icon per running application, grouping its windows together.</summary>
-internal sealed class TaskbarMonobarModule : MonobarModuleBase
+internal sealed class TaskbarBarModule : BarModuleBase
 {
     private const int MaxVisibleApps = 7;
     private const double IconButtonWidth = 30;
@@ -37,7 +37,7 @@ internal sealed class TaskbarMonobarModule : MonobarModuleBase
     private readonly Dictionary<string, AppGroupState> _groups = new(StringComparer.OrdinalIgnoreCase);
     private DateTime _lastRefresh = DateTime.MinValue;
 
-    public TaskbarMonobarModule(MainWindow owner) : base(owner)
+    public TaskbarBarModule(MainWindow owner) : base(owner)
     {
         _scroll = new ScrollViewer
         {

@@ -6,53 +6,53 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace Monolith.Studio;
 
-internal sealed class TaskViewMonobarModule : MonobarModuleBase
+internal sealed class TaskViewBarModule : BarModuleBase
 {
-    public TaskViewMonobarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE7C4", "Task view", (_, _) => SendWindowsShortcut(0x09));
+    public TaskViewBarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE7C4", "Task view", (_, _) => SendWindowsShortcut(0x09));
     public override string Id => "task-view";
     public override UIElement Element { get; }
     private static void SendWindowsShortcut(ushort key) => NativeShortcut.Send(key);
 }
 
-internal sealed class QuickSettingsMonobarModule : MonobarModuleBase
+internal sealed class QuickSettingsBarModule : BarModuleBase
 {
-    public QuickSettingsMonobarModule(MainWindow owner) : base(owner) =>
+    public QuickSettingsBarModule(MainWindow owner) : base(owner) =>
         Element = IconButton("\uE713", "Open Windows Quick Settings", (_, _) => NativeShortcut.Send(0x41));
     public override string Id => "quick-settings";
     public override UIElement Element { get; }
 }
 
-internal sealed class ShowDesktopMonobarModule : MonobarModuleBase
+internal sealed class ShowDesktopBarModule : BarModuleBase
 {
-    public ShowDesktopMonobarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE80F", "Show desktop", (_, _) => NativeShortcut.Send(0x44));
+    public ShowDesktopBarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE80F", "Show desktop", (_, _) => NativeShortcut.Send(0x44));
     public override string Id => "show-desktop";
     public override UIElement Element { get; }
 }
 
-internal sealed class RecycleBinMonobarModule : MonobarModuleBase
+internal sealed class RecycleBinBarModule : BarModuleBase
 {
-    public RecycleBinMonobarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE74D", "Open Recycle Bin", (_, _) => Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }));
+    public RecycleBinBarModule(MainWindow owner) : base(owner) => Element = IconButton("\uE74D", "Open Recycle Bin", (_, _) => Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }));
     public override string Id => "recycle-bin";
     public override UIElement Element { get; }
 }
 
-internal sealed class SystemMonitorMonobarModule : MonobarModuleBase
+internal sealed class SystemMonitorBarModule : BarModuleBase
 {
     private readonly TextBlock _readout = new() { FontSize = 13 };
     private readonly TextBlock _barReadout = new() { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
-    private readonly MonobarPopupWindow _popup;
+    private readonly BarPopupWindow _popup;
     private long _previousIdle, _previousKernel, _previousUser;
     private bool _hasCpuSample;
 
-    public SystemMonitorMonobarModule(MainWindow owner) : base(owner)
+    public SystemMonitorBarModule(MainWindow owner) : base(owner)
     {
         var content = new StackPanel { Width = 270, Spacing = 12 };
-        content.Children.Add(MonobarPopupContent.Header("\uE9D9", "System monitor", "Current usage"));
-        var card = MonobarPopupContent.Card();
+        content.Children.Add(BarPopupContent.Header("\uE9D9", "System monitor", "Current usage"));
+        var card = BarPopupContent.Card();
         _readout.FontSize = 13;
         card.Child = _readout;
         content.Children.Add(card);
-        _popup = new MonobarPopupWindow(MonobarPopupContent.PopupSurface(content, 310, 0), 310, 0);
+        _popup = new BarPopupWindow(BarPopupContent.PopupSurface(content, 310, 0), 310, 0);
         var button = new Button
         {
             Height = ModuleHeight, MinHeight = 0, MaxHeight = ModuleHeight,

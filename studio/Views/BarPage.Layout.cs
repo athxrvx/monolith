@@ -12,11 +12,11 @@ using Windows.Storage.Pickers;
 
 namespace Monolith.Studio.Views;
 
-public sealed partial class MonobarPage
+public sealed partial class BarPage
 {
-    public ObservableCollection<MonobarModuleConfig> LeftModuleItems { get; } = new();
-    public ObservableCollection<MonobarModuleConfig> CenterModuleItems { get; } = new();
-    public ObservableCollection<MonobarModuleConfig> RightModuleItems { get; } = new();
+    public ObservableCollection<BarModuleConfig> LeftModuleItems { get; } = new();
+    public ObservableCollection<BarModuleConfig> CenterModuleItems { get; } = new();
+    public ObservableCollection<BarModuleConfig> RightModuleItems { get; } = new();
 
     private void InitializeModuleLanes()
     {
@@ -33,10 +33,10 @@ public sealed partial class MonobarPage
         ReplaceLaneItems(RightModuleItems, "Right");
     }
 
-    private static void ReplaceLaneItems(ObservableCollection<MonobarModuleConfig> lane, string alignment)
+    private static void ReplaceLaneItems(ObservableCollection<BarModuleConfig> lane, string alignment)
     {
         lane.Clear();
-        foreach (var module in App.MainViewModel.MonobarModules
+        foreach (var module in App.MainViewModel.BarModules
             .Where(module => module.Enabled && string.Equals(module.Alignment, alignment, StringComparison.OrdinalIgnoreCase))
             .OrderBy(module => module.Order))
             lane.Add(module);
@@ -44,7 +44,7 @@ public sealed partial class MonobarPage
 
     private void ModuleDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
-        var module = e.Items.OfType<MonobarModuleConfig>().FirstOrDefault();
+        var module = e.Items.OfType<BarModuleConfig>().FirstOrDefault();
         if (module is null) return;
         e.Data.SetText(module.Id);
         e.Data.RequestedOperation = DataPackageOperation.Move;
@@ -114,7 +114,7 @@ public sealed partial class MonobarPage
         try { id = await e.DataView.GetTextAsync(); }
         catch { return; }
 
-        var module = App.MainViewModel.MonobarModules.FirstOrDefault(item =>
+        var module = App.MainViewModel.BarModules.FirstOrDefault(item =>
             string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase) && item.Enabled);
         if (module is null) return;
 
@@ -131,7 +131,7 @@ public sealed partial class MonobarPage
         PersistLaneOrder();
         QueueUpdate();
     }
-    private ObservableCollection<MonobarModuleConfig> LaneFor(string alignment) => alignment switch
+    private ObservableCollection<BarModuleConfig> LaneFor(string alignment) => alignment switch
     {
         "Center" => CenterModuleItems,
         "Right" => RightModuleItems,
@@ -143,34 +143,34 @@ public sealed partial class MonobarPage
         var vm = App.MainViewModel;
         var active = LeftModuleItems.Concat(CenterModuleItems).Concat(RightModuleItems).ToList();
         var knownActive = new HashSet<string>(active.Select(module => module.Id), StringComparer.OrdinalIgnoreCase);
-        active.AddRange(vm.MonobarModules.Where(module => module.Enabled && !knownActive.Contains(module.Id))
+        active.AddRange(vm.BarModules.Where(module => module.Enabled && !knownActive.Contains(module.Id))
             .OrderBy(module => module.Order));
-        active.AddRange(vm.MonobarModules.Where(module => !module.Enabled).OrderBy(module => module.Order));
+        active.AddRange(vm.BarModules.Where(module => !module.Enabled).OrderBy(module => module.Order));
 
-        vm.MonobarModules.Clear();
+        vm.BarModules.Clear();
         for (int index = 0; index < active.Count; index++)
         {
             active[index].Order = index;
-            vm.MonobarModules.Add(active[index]);
+            vm.BarModules.Add(active[index]);
         }
-        vm.Config.MonobarModules = vm.MonobarModules.ToList();
+        vm.Config.BarModules = vm.BarModules.ToList();
     }
 
     private void RemoveAppletClicked(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: MonobarModuleConfig module }) return;
+        if (sender is not Button { Tag: BarModuleConfig module }) return;
         LaneFor(module.Alignment).Remove(module);
-        App.MainViewModel.MonobarModules.Remove(module);
+        App.MainViewModel.BarModules.Remove(module);
         PersistLaneOrder();
         QueueUpdate();
     }
 
     private void ModuleSettingsClicked(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: MonobarModuleConfig module }) _ = ShowModuleSettingsAsync(module);
+        if (sender is Button { Tag: BarModuleConfig module }) _ = ShowModuleSettingsAsync(module);
     }
 
-    private async System.Threading.Tasks.Task ShowModuleSettingsAsync(MonobarModuleConfig module)
+    private async System.Threading.Tasks.Task ShowModuleSettingsAsync(BarModuleConfig module)
     {
         var content = new StackPanel { Spacing = 12, MinWidth = 420 };
         content.Children.Add(new TextBlock { Text = module.Description, TextWrapping = TextWrapping.Wrap, Opacity = 0.72 });
@@ -241,7 +241,7 @@ public sealed partial class MonobarPage
         }
         catch (Exception ex)
         {
-            App.LogStartup("Failed to select the Monobar wallpaper folder", ex);
+            App.LogStartup("Failed to select the Bar wallpaper folder", ex);
             return null;
         }
     }
@@ -264,9 +264,9 @@ public sealed partial class MonobarPage
         {
             rows.Children.Clear();
             var vm = App.MainViewModel;
-            var activeIds = new HashSet<string>(vm.MonobarModules.Where(module => module.Enabled).Select(module => module.Id), StringComparer.OrdinalIgnoreCase);
+            var activeIds = new HashSet<string>(vm.BarModules.Where(module => module.Enabled).Select(module => module.Id), StringComparer.OrdinalIgnoreCase);
             string query = search.Text.Trim();
-            var available = MonobarModuleConfig.CreateDefaults()
+            var available = BarModuleConfig.CreateDefaults()
                 .Where(module => !activeIds.Contains(module.Id))
                 .Where(module => query.Length == 0
                     || module.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
@@ -325,22 +325,22 @@ public sealed partial class MonobarPage
     private void AddApplet(string id, string alignment)
     {
         var vm = App.MainViewModel;
-        var module = vm.MonobarModules.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+        var module = vm.BarModules.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
         if (module is null)
         {
-            var defaults = MonobarModuleConfig.CreateDefaults().FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+            var defaults = BarModuleConfig.CreateDefaults().FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
             if (defaults is null) return;
-            module = new MonobarModuleConfig
+            module = new BarModuleConfig
             {
                 Id = defaults.Id,
                 Enabled = true,
-                Order = vm.MonobarModules.Count,
+                Order = vm.BarModules.Count,
                 Alignment = alignment,
                 WallpaperFolder = defaults.WallpaperFolder,
                 ClockUse24Hour = defaults.ClockUse24Hour,
                 VisibilityCondition = defaults.VisibilityCondition
             };
-            vm.MonobarModules.Add(module);
+            vm.BarModules.Add(module);
         }
         else
         {

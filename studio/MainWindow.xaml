@@ -51,19 +51,14 @@
                         <FontIcon Glyph="&#xE737;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="Monobar" Tag="Monobar">
+                <NavigationViewItem Content="Bar" Tag="Bar">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8A7;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="MonoLauncher" Tag="MonoLauncher">
+                <NavigationViewItem Content="Launcher" Tag="Launcher">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE721;"/>
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem Content="MonoDock" Tag="MonoDock">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE8A1;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="Window Rules" Tag="Rules">

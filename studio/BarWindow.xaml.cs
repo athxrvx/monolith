@@ -13,7 +13,7 @@ using Windows.Graphics;
 
 namespace Monolith.Studio;
 
-public sealed partial class MonobarWindow : Window
+public sealed partial class BarWindow : Window
 {
     private const int GwlExStyle = -20;
     private const int GwlStyle = -16;
@@ -54,7 +54,7 @@ public sealed partial class MonobarWindow : Window
         public IntPtr Param;
     }
 
-    private readonly List<IMonobarModule> _modules = new();
+    private readonly List<IBarModule> _modules = new();
     private readonly DispatcherQueueTimer _refreshTimer;
     private readonly IntPtr _hwnd;
     internal static IntPtr BarHandle { get; private set; }
@@ -66,7 +66,7 @@ public sealed partial class MonobarWindow : Window
     private string? _appliedModuleConfiguration;
     private AcrylicWindowBackdrop? _acrylicBackdrop;
 
-    public MonobarWindow()
+    public BarWindow()
     {
         InitializeComponent();
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -95,7 +95,7 @@ public sealed partial class MonobarWindow : Window
             foreach (var module in _modules)
             {
                 try { module.Dispose(); }
-                catch (Exception ex) { App.LogStartup($"Failed to close Monobar module '{module.Id}'", ex); }
+                catch (Exception ex) { App.LogStartup($"Failed to close Bar module '{module.Id}'", ex); }
             }
             _modules.Clear();
             if (_registeredAsAppBar)
@@ -112,28 +112,28 @@ public sealed partial class MonobarWindow : Window
     {
         var config = App.MainViewModel.Config;
         var work = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
-        int height = Math.Clamp(config.MonobarHeight, 28, 64);
-        bool materialChanged = !string.Equals(_appliedMaterial, config.MonobarMaterial, StringComparison.Ordinal);
-        bool opacityChanged = _appliedOpacity != config.MonobarOpacity;
+        int height = Math.Clamp(config.BarHeight, 28, 64);
+        bool materialChanged = !string.Equals(_appliedMaterial, config.BarMaterial, StringComparison.Ordinal);
+        bool opacityChanged = _appliedOpacity != config.BarOpacity;
         bool heightChanged = _appliedHeight != height;
-        if (materialChanged) ApplyBackdrop(config.MonobarMaterial, config.MonobarOpacity);
-        byte tintAlpha = (byte)Math.Clamp(10 + config.MonobarOpacity * 0.55, 20, 70);
+        if (materialChanged) ApplyBackdrop(config.BarMaterial, config.BarOpacity);
+        byte tintAlpha = (byte)Math.Clamp(10 + config.BarOpacity * 0.55, 20, 70);
         if (materialChanged || opacityChanged)
         {
-            BarSurface.Background = config.MonobarMaterial switch
+            BarSurface.Background = config.BarMaterial switch
             {
                 "Acrylic (Frosted Glass)" => new SolidColorBrush(Windows.UI.Color.FromArgb(0, 22, 22, 22)),
                 "Pure OLED Dark" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 0, 0)),
                 "Mica" or "Mica Alt" => new SolidColorBrush(Windows.UI.Color.FromArgb(38, 18, 18, 18)),
                 _ => new SolidColorBrush(Windows.UI.Color.FromArgb(tintAlpha, 22, 22, 22))
             };
-            if (config.MonobarMaterial == "Acrylic (Frosted Glass)")
-                _acrylicBackdrop?.SetTintOpacity(config.MonobarOpacity / 250d);
-            _appliedMaterial = config.MonobarMaterial;
-            _appliedOpacity = config.MonobarOpacity;
+            if (config.BarMaterial == "Acrylic (Frosted Glass)")
+                _acrylicBackdrop?.SetTintOpacity(config.BarOpacity / 250d);
+            _appliedMaterial = config.BarMaterial;
+            _appliedOpacity = config.BarOpacity;
         }
 
-        string moduleConfiguration = string.Join("|", (config.MonobarModules ?? Models.MonobarModuleConfig.CreateDefaults())
+        string moduleConfiguration = string.Join("|", (config.BarModules ?? Models.BarModuleConfig.CreateDefaults())
             .Where(item => item.Enabled)
             .OrderBy(item => item.Order)
             .Select(item => $"{item.Id}:{item.Order}:{item.Alignment}:{item.WallpaperFolder}:{item.ClockUse24Hour}:{item.VisibilityCondition}"));
@@ -142,17 +142,17 @@ public sealed partial class MonobarWindow : Window
             foreach (var module in _modules)
             {
                 try { module.Dispose(); }
-                catch (Exception ex) { App.LogStartup($"Failed to close Monobar module '{module.Id}'", ex); }
+                catch (Exception ex) { App.LogStartup($"Failed to close Bar module '{module.Id}'", ex); }
             }
             _modules.Clear();
             LeftModules.Children.Clear();
             CenterModules.Children.Clear();
             RightModules.Children.Clear();
-            foreach (var item in (config.MonobarModules ?? Models.MonobarModuleConfig.CreateDefaults()).Where(item => item.Enabled).OrderBy(item => item.Order))
+            foreach (var item in (config.BarModules ?? Models.BarModuleConfig.CreateDefaults()).Where(item => item.Enabled).OrderBy(item => item.Order))
             {
                 try
                 {
-                    var module = MonobarModuleFactory.Create(item, App.MainWindowInstance!);
+                    var module = BarModuleFactory.Create(item, App.MainWindowInstance!);
                     if (module is null) continue;
                     _modules.Add(module);
                     var host = item.Alignment switch
@@ -165,14 +165,14 @@ public sealed partial class MonobarWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    App.LogStartup($"Failed to create Monobar module '{item.Id}'", ex);
+                    App.LogStartup($"Failed to create Bar module '{item.Id}'", ex);
                 }
             }
             _appliedModuleConfiguration = moduleConfiguration;
             RefreshModules();
         }
 
-        bool shouldShow = config.MonolithEnabled && config.MonobarEnabled;
+        bool shouldShow = config.MonolithEnabled && config.BarEnabled;
         if (shouldShow && (_barVisible != true || heightChanged)) ShowBar();
         else if (!shouldShow && _barVisible != false) HideBar();
         _appliedHeight = height;
@@ -198,18 +198,18 @@ public sealed partial class MonobarWindow : Window
 
     public void RefreshModules()
     {
-        MonobarConditionService.RefreshMediaState();
+        BarConditionService.RefreshMediaState();
         foreach (var module in _modules)
         {
             try
             {
                 module.Refresh();
-                var config = App.MainViewModel.Config.MonobarModules?.FirstOrDefault(item => string.Equals(item.Id, module.Id, StringComparison.OrdinalIgnoreCase));
+                var config = App.MainViewModel.Config.BarModules?.FirstOrDefault(item => string.Equals(item.Id, module.Id, StringComparison.OrdinalIgnoreCase));
                 string condition = config?.VisibilityCondition ?? "always";
-                bool visible = MonobarConditionService.Evaluate(condition);
+                bool visible = BarConditionService.Evaluate(condition);
                 module.Element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             }
-            catch (Exception ex) { App.LogStartup($"Failed to refresh Monobar module '{module.Id}'", ex); }
+            catch (Exception ex) { App.LogStartup($"Failed to refresh Bar module '{module.Id}'", ex); }
         }
     }
 
@@ -217,7 +217,7 @@ public sealed partial class MonobarWindow : Window
     {
         RegisterAppBar();
         var bounds = DisplayArea.Primary?.OuterBounds ?? new RectInt32(0, 0, 1920, 1080);
-        int height = Math.Clamp(App.MainViewModel.Config.MonobarHeight, 28, 64);
+        int height = Math.Clamp(App.MainViewModel.Config.BarHeight, 28, 64);
         MoveToTop(bounds, height);
         SetWindowPos(_hwnd, HwndTopmost, bounds.X, bounds.Y, bounds.Width, height, SwpNoActivate | SwpFrameChanged | SwpShowWindow);
         _barVisible = true;

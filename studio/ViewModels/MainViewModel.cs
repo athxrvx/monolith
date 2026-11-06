@@ -47,7 +47,7 @@ public partial class MainViewModel : ObservableObject
     private ObservableCollection<HotkeyBinding> _hotkeyBindings = new();
 
     [ObservableProperty]
-    private ObservableCollection<MonobarModuleConfig> _monobarModules = new();
+    private ObservableCollection<BarModuleConfig> _barModules = new();
 
     [ObservableProperty]
     private int _activeWorkspace = 1;
@@ -64,7 +64,7 @@ public partial class MainViewModel : ObservableObject
 
         WindowRules = new ObservableCollection<WindowRule>(Config.WindowRules);
         HotkeyBindings = new ObservableCollection<HotkeyBinding>(Config.Hotkeys);
-        MonobarModules = new ObservableCollection<MonobarModuleConfig>(Config.MonobarModules ?? MonobarModuleConfig.CreateDefaults());
+        BarModules = new ObservableCollection<BarModuleConfig>(Config.BarModules ?? BarModuleConfig.CreateDefaults());
 
         await _ipcClient.StartAsync();
         if (Config.MonolithEnabled && Config.EngineStartup && !_engineSupervisor.IsRunning)
@@ -92,7 +92,7 @@ public partial class MainViewModel : ObservableObject
                 EnginePid = 0;
                 EngineRamUsage = "0.0 MB";
             }
-            App.MainWindowInstance?.RefreshMonobarState();
+            App.MainWindowInstance?.RefreshBarState();
         });
     }
 
@@ -109,7 +109,7 @@ public partial class MainViewModel : ObservableObject
             }
             catch (JsonException) { }
             UpdateEngineProcessInfo();
-            App.MainWindowInstance?.RefreshMonobarState();
+            App.MainWindowInstance?.RefreshBarState();
         });
     }
 
@@ -132,7 +132,7 @@ public partial class MainViewModel : ObservableObject
         {
             Config.WindowRules = new System.Collections.Generic.List<WindowRule>(WindowRules);
             Config.Hotkeys = new System.Collections.Generic.List<HotkeyBinding>(HotkeyBindings);
-            Config.MonobarModules = new System.Collections.Generic.List<MonobarModuleConfig>(MonobarModules.OrderBy(module => module.Order));
+            Config.BarModules = new System.Collections.Generic.List<BarModuleConfig>(BarModules.OrderBy(module => module.Order));
             await ConfigService.SaveConfigAsync(Config);
             StartupRegistrationService.Apply(Config.EngineStartup);
             AccentColorService.RefreshAccent();
@@ -143,8 +143,7 @@ public partial class MainViewModel : ObservableObject
             {
                 App.RefreshHotkeys?.Invoke();
                 App.MainWindowInstance?.ApplyLauncherAppearance();
-                App.MainWindowInstance?.ApplyMonobarConfiguration();
-                App.MainWindowInstance?.ApplyMonoDockConfiguration();
+                App.MainWindowInstance?.ApplyBarConfiguration();
             });
         }
         finally
@@ -159,10 +158,9 @@ public partial class MainViewModel : ObservableObject
         Config = await ConfigService.LoadConfigAsync();
         WindowRules = new ObservableCollection<WindowRule>(Config.WindowRules);
         HotkeyBindings = new ObservableCollection<HotkeyBinding>(Config.Hotkeys);
-        MonobarModules = new ObservableCollection<MonobarModuleConfig>(Config.MonobarModules ?? MonobarModuleConfig.CreateDefaults());
+        BarModules = new ObservableCollection<BarModuleConfig>(Config.BarModules ?? BarModuleConfig.CreateDefaults());
         await _ipcClient.SendCommandAsync("RELOAD_CONFIG");
-        App.MainWindowInstance?.ApplyMonobarConfiguration();
-        App.MainWindowInstance?.ApplyMonoDockConfiguration();
+        App.MainWindowInstance?.ApplyBarConfiguration();
     }
 
     [RelayCommand]
@@ -232,12 +230,12 @@ public partial class MainViewModel : ObservableObject
         App.LogStartup($"Workspace switch command to {workspace}: {(sent ? "sent" : "IPC unavailable")}");
     }
 
-    public void MoveMonobarModule(string id, int offset)
+    public void MoveBarModule(string id, int offset)
     {
         int index = -1;
-        for (int i = 0; i < MonobarModules.Count; i++)
+        for (int i = 0; i < BarModules.Count; i++)
         {
-            if (string.Equals(MonobarModules[i].Id, id, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(BarModules[i].Id, id, StringComparison.OrdinalIgnoreCase))
             {
                 index = i;
                 break;
@@ -245,11 +243,11 @@ public partial class MainViewModel : ObservableObject
         }
 
         int target = index + Math.Sign(offset);
-        if (index < 0 || target < 0 || target >= MonobarModules.Count) return;
-        MonobarModules.Move(index, target);
-        for (int i = 0; i < MonobarModules.Count; i++)
-            MonobarModules[i].Order = i;
-        Config.MonobarModules = MonobarModules.OrderBy(module => module.Order).ToList();
+        if (index < 0 || target < 0 || target >= BarModules.Count) return;
+        BarModules.Move(index, target);
+        for (int i = 0; i < BarModules.Count; i++)
+            BarModules[i].Order = i;
+        Config.BarModules = BarModules.OrderBy(module => module.Order).ToList();
     }
 
     public async Task NavigateWorkspaceAsync(int delta)

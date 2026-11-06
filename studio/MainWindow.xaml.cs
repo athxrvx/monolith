@@ -37,8 +37,7 @@ public sealed partial class MainWindow : Window
 
     private readonly WorkspaceHotkeyService _workspaceHotkeys;
     private readonly LauncherWindow _launcherWindow;
-    private readonly MonobarWindow _monobarWindow;
-    private readonly MonoDockWindow _monoDockWindow;
+    private readonly BarWindow _barWindow;
     private readonly TrayIconService? _trayIconService;
     private bool _allowWindowClose;
 
@@ -72,8 +71,7 @@ public sealed partial class MainWindow : Window
         _launcherWindow = new LauncherWindow();
         _launcherWindow.RequestOpenSettings = OpenSettingsPage;
         App.MainWindowInstance = this;
-        _monobarWindow = new MonobarWindow();
-        _monoDockWindow = new MonoDockWindow();
+        _barWindow = new BarWindow();
         _workspaceHotkeys = new WorkspaceHotkeyService(windowHandle, App.MainViewModel.HotkeyBindings, OnHotkeyPressed);
         App.RefreshHotkeys = () => _workspaceHotkeys.ReloadBindings(App.MainViewModel.HotkeyBindings);
         App.SetHotkeysEnabled = _workspaceHotkeys.SetEnabled;
@@ -107,10 +105,8 @@ public sealed partial class MainWindow : Window
             catch (Exception ex) { App.LogStartup("Failed to dispose workspace hotkeys", ex); }
             try { _launcherWindow.Close(); }
             catch (Exception ex) { App.LogStartup("Failed to close launcher window", ex); }
-            try { _monobarWindow.Close(); }
-            catch (Exception ex) { App.LogStartup("Failed to close Monobar", ex); }
-            try { _monoDockWindow.Close(); }
-            catch (Exception ex) { App.LogStartup("Failed to close MonoDock", ex); }
+            try { _barWindow.Close(); }
+            catch (Exception ex) { App.LogStartup("Failed to close Bar", ex); }
             try { _trayIconService?.Dispose(); }
             catch (Exception ex) { App.LogStartup("Failed to remove the tray icon", ex); }
         };
@@ -158,11 +154,9 @@ public sealed partial class MainWindow : Window
 
     public void ApplyLauncherAppearance() => _launcherWindow.ApplyAppearance();
 
-    public void ApplyMonobarConfiguration() => _monobarWindow.ApplyConfiguration();
+    public void ApplyBarConfiguration() => _barWindow.ApplyConfiguration();
 
-    public void ApplyMonoDockConfiguration() => _monoDockWindow.ApplyConfiguration();
-
-    public void RefreshMonobarState() => _monobarWindow.RefreshModules();
+    public void RefreshBarState() => _barWindow.RefreshModules();
 
     public void ToggleLauncher() => ShowLauncher();
 
@@ -357,12 +351,12 @@ public sealed partial class MainWindow : Window
             OffContent = "Off",
             IsOn = App.MainViewModel.Config.LauncherEnabled
         };
-        var monobarToggle = new ToggleSwitch
+        var barToggle = new ToggleSwitch
         {
-            Header = "Show the Monobar",
+            Header = "Show the Bar",
             OnContent = "On",
             OffContent = "Off",
-            IsOn = App.MainViewModel.Config.MonobarEnabled
+            IsOn = App.MainViewModel.Config.BarEnabled
         };
         int step = 0;
         var dialog = new ContentDialog
@@ -380,7 +374,7 @@ public sealed partial class MainWindow : Window
         {
             dialog.Content = new ScrollViewer
             {
-                Content = CreateOnboardingStep(step, startupToggle, launcherToggle, monobarToggle),
+                Content = CreateOnboardingStep(step, startupToggle, launcherToggle, barToggle),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 MaxHeight = 560
@@ -410,11 +404,11 @@ public sealed partial class MainWindow : Window
         {
             App.MainViewModel.Config.EngineStartup = startupToggle.IsOn;
             App.MainViewModel.Config.LauncherEnabled = launcherToggle.IsOn;
-            App.MainViewModel.Config.MonobarEnabled = monobarToggle.IsOn;
+            App.MainViewModel.Config.BarEnabled = barToggle.IsOn;
             App.MainViewModel.Config.OnboardingCompleted = true;
             await App.MainViewModel.SaveConfigAsync();
             SetLauncherAvailable(App.MainViewModel.Config.MonolithEnabled && launcherToggle.IsOn);
-            ApplyMonobarConfiguration();
+            ApplyBarConfiguration();
         }
         else if (result == ContentDialogResult.None)
         {
@@ -424,7 +418,7 @@ public sealed partial class MainWindow : Window
 
     }
 
-    private static UIElement CreateOnboardingStep(int step, ToggleSwitch startupToggle, ToggleSwitch launcherToggle, ToggleSwitch monobarToggle)
+    private static UIElement CreateOnboardingStep(int step, ToggleSwitch startupToggle, ToggleSwitch launcherToggle, ToggleSwitch barToggle)
     {
         var content = new StackPanel { Spacing = 16, Width = 500, Margin = new Thickness(4, 6, 4, 2) };
         var stepLabels = new[] { "THE IDEA", "THE CONTROLS", "YOUR SETUP" };
@@ -549,10 +543,10 @@ public sealed partial class MainWindow : Window
             });
             content.Children.Add(CreateOnboardingSettingCard("STARTUP", "Keep your workspace ready", "Launch the engine automatically when Monolith starts.", startupToggle));
             content.Children.Add(CreateOnboardingSettingCard("LAUNCHER", "Find apps quickly", "Use Alt + Space to open the command launcher.", launcherToggle));
-            content.Children.Add(CreateOnboardingSettingCard("MONOBAR", "Keep workspace status nearby", "Show the configurable bar across the top of your screen.", monobarToggle));
+            content.Children.Add(CreateOnboardingSettingCard("BAR", "Keep workspace status nearby", "Show the configurable bar across the top of your screen.", barToggle));
             content.Children.Add(new TextBlock
             {
-                Text = "You can change these choices later in General and Monobar settings.",
+                Text = "You can change these choices later in General and Bar settings.",
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.62,
@@ -713,9 +707,8 @@ public sealed partial class MainWindow : Window
     {
         Type pageType = tag switch
         {
-            "Monobar" => typeof(MonobarPage),
-            "MonoLauncher" => typeof(MonoLauncherPage),
-            "MonoDock" => typeof(MonoDockPage),
+            "Bar" => typeof(BarPage),
+            "Launcher" => typeof(LauncherPage),
             "Tiling" => typeof(TilingPage),
             "Rules" => typeof(RulesPage),
             "Appearance" => typeof(AppearancePage),
@@ -729,9 +722,8 @@ public sealed partial class MainWindow : Window
         BreadcrumbTitle.Text = tag switch
         {
             "Tiling" => "Scrolling Window Manager",
-            "Monobar" => "Monobar",
-            "MonoLauncher" => "MonoLauncher",
-            "MonoDock" => "MonoDock",
+            "Bar" => "Bar",
+            "Launcher" => "Launcher",
             "Rules" => "Window Routing Rules",
             "Appearance" => "Appearance & Themes",
             "Hotkeys" => "Keyboard Shortcuts & Hotkeys",

@@ -2,7 +2,7 @@ using Windows.Media.Control;
 
 namespace Monolith.Studio.Services;
 
-internal static class MonobarConditionService
+internal static class BarConditionService
 {
     private static readonly object Gate = new();
     private static bool _mediaPlaying;
@@ -15,7 +15,7 @@ internal static class MonobarConditionService
         "media-playing" => _mediaPlaying,
         "battery-low" => ReadBattery() is { HasBattery: true, Percent: <= 20 },
         "on-battery" => ReadBattery() is { HasBattery: true, Charging: false },
-        "network-connected" => MonobarSystemStatus.GetNetworkStatus().Label == "Online",
+        "network-connected" => BarSystemStatus.GetNetworkStatus().Label == "Online",
         _ => false
     };
 
@@ -46,5 +46,5 @@ internal static class MonobarConditionService
         }
     }
 
-    private static (int Percent, bool Charging, bool HasBattery) ReadBattery() => MonobarSystemStatus.GetBatteryStatus();
+    private static (int Percent, bool Charging, bool HasBattery) ReadBattery() => BarSystemStatus.GetBatteryStatus();
 }

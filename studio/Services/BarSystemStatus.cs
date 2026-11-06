@@ -8,7 +8,7 @@ using Windows.Devices.Radios;
 
 namespace Monolith.Studio.Services;
 
-internal static class MonobarSystemStatus
+internal static class BarSystemStatus
 {
     private static readonly Guid AudioEndpointVolumeId = new("5CDF2C82-841E-4546-9722-0CF74078229A");
     private static readonly Guid AudioSessionManager2Id = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
